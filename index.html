@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>쨔무쨔무 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <nav class="rail">
+    <div class="srv on" title="쨔무쨔무"><img id="srvIcon" alt=""></div>
+    <hr>
+    <div class="srv ghost" title="서버 추가">+</div>
+  </nav>
+
+  <nav class="side">
+    <div class="side-hd">쨔무쨔무 <small>▾</small></div>
+    <div class="side-body">
+      <div class="cat">텍스트 채널</div>
+      <button class="ch on" data-ch="main"><span class="h">#</span>쨔무쨔무-도배</button>
+      <button class="ch lock" data-ch="notice"><span class="h">#</span>공지사항</button>
+      <button class="ch lock" data-ch="free"><span class="h">#</span>자유수다</button>
+      <button class="ch lock" data-ch="info"><span class="h">#</span>업그레이드-정보</button>
+      <button class="ch" data-ch="credit"><span class="h">#</span>크레딧</button>
+      <div class="cat">음성 채널</div>
+      <button class="ch lock" data-ch="voice"><span class="h">♪</span>쨔무쨔무 듣는 방<span class="cnt" id="voiceCnt">2</span></button>
+    </div>
+    <div class="me">
+      <img id="meAv" alt="">
+      <div>
+        <div class="nm">나</div>
+        <div class="sub"><span id="meJamu">0</span> 쨔무</div>
+      </div>
+    </div>
+  </nav>
+
+  <section class="chat">
+    <header class="ch-hd">
+      <div class="who">
+        <div class="nm"><i>#</i>쨔무쨔무-도배</div>
+        <div class="topic">서버원 <span id="viewers">12</span>명 · 내 등급 <b id="rank">뉴비 시청자</b></div>
+      </div>
+      <div class="wallet" id="wallet">
+        <span class="amt" id="amt">0</span><span class="unit">쨔무</span>
+        <span class="rate" id="rate"></span>
+      </div>
+      <button class="shopbtn" id="shopBtn" aria-expanded="false" aria-controls="shop">상점<span class="dot" id="dot"></span></button>
+    </header>
+
+    <ol id="log"></ol>
+
+    <div class="foot">
+      <div class="typing" id="typing"></div>
+      <div class="composer">
+        <span class="plus" aria-hidden="true">+</span>
+        <div class="draft">
+          <img id="draftEmote" alt="">
+          <span>:쨔무쨔무:</span>
+          <span class="x" id="draftX"></span>
+        </div>
+        <button id="send"><span class="fill" id="fill"></span><span class="lbl" id="sendLbl">보내기</span></button>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim"></div>
+  </section>
+
+  <aside class="shop" id="shop">
+    <div class="shop-in">
+      <div class="shop-hd">
+        <h2>업그레이드 상점</h2>
+        <p>모은 쨔무로 더 빨리, 더 많이 쨔무쨔무를 보내세요.</p>
+      </div>
+      <div class="shop-body" id="shopBody"></div>
+      <div class="shop-ft">
+        <span id="totalTxt">총 0 쨔무 획득</span>
+        <button id="reset">처음부터</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
