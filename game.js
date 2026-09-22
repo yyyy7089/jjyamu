@@ -10,17 +10,18 @@ const UP = [
 
   { id:'amp', grp:'손가락', name:'쨔무 증폭기', max:999, unlock:0,
     cost:n=>Math.ceil(24*Math.pow(1.42,n)),
-    desc:'한 번 보낼 때 얻는 쨔무가 1 늘어난다.',
+    desc:s=>'한 번 보낼 때 얻는 쨔무가 ' + ampStep(s) + ' 늘어난다.',
     now:s=>'전송당 '+fmt(perSend(s))+' 쨔무' },
 
   { id:'crit', grp:'손가락', name:'크리티컬 쨔무쨔무', max:40, unlock:2500,
     cost:n=>Math.ceil(500*Math.pow(1.75,n)),
-    desc:'1%p 확률로 더 큰 쨔무쨔무가 전송되어 획득량이 10배가 된다.',
+    desc:s=>'1%p 확률로 더 큰 쨔무쨔무가 전송되어 획득량이 ' + fmt(critMul(s)) + '배가 된다.',
     now:s=>'확률 '+s.crit+'%' },
 
   { id:'react', grp:'손가락', name:'쨔무 리액션', max:40, unlock:30000,
     cost:n=>Math.ceil(2000*Math.pow(1.75,n)),
-    desc:'1%p 확률로 서버 주인이 내 쨔무쨔무에 반응해 획득량이 10배가 된다. 크리티컬과 같이 터지면 100배.',
+    desc:s=>'1%p 확률로 서버 주인이 내 쨔무쨔무에 반응해 획득량이 ' + fmt(ownMul(s)) + '배가 된다. ' +
+      '크리티컬과 같이 터지면 ' + fmt(critMul(s)*ownMul(s)) + '배.',
     now:s=>'확률 '+s.react+'%' },
 
   { id:'cap', grp:'손가락', name:'쨔무 연타 근성', max:15, unlock:5000,
@@ -28,7 +29,7 @@ const UP = [
     desc:'연타 콤보 상한이 10 올라간다.',
     now:s=>'콤보 상한 '+comboCap(s) },
 
-  { id:'bot', grp:'자동화', name:'쨔무 자동완성 매크로', max:10, unlock:90,
+  { id:'bot', grp:'자동화', name:'쨔무 자동완성 매크로', max:s=>botMax(s), unlock:90,
     cost:n=>Math.ceil(110*Math.pow(1.15,n)),
     desc:'5초마다 알아서 쨔무쨔무를 한 번 보낸다.',
     now:s=>'매크로 '+s.bot+'대' },
@@ -47,6 +48,11 @@ const UP = [
     cost:n=>Math.ceil(24000*Math.pow(8,n)),
     desc:'쨔무쨔무가 유행을 타 모든 쨔무 획득량이 2배가 된다.',
     now:s=>'유행 ×'+Math.pow(2,s.meme) },
+
+  { id:'eboost', grp:'공장', name:'쨔무 에너지 부스트', max:Infinity, unlock:0, req:s=>s.reb >= 8,
+    cost:n=>Math.ceil(10000*Math.pow(2,n)),
+    desc:'손으로 보낼 때 얻는 쨔무 에너지가 10%p 늘어난다.',
+    now:s=>'에너지 ×'+eboostMul(s).toFixed(1) },
 ];
 
 /* ── 쨔무 공장 설비 (쨔무 에너지로 구매, 환생해도 유지) ── */
@@ -61,6 +67,21 @@ const EUP = [
     desc:'쿨타임이 끝난 뒤 콤보를 이어갈 수 있는 시간이 0.3초 늘어난다.',
     now:s=>'콤보 유지 '+(comboWin(s)/1000).toFixed(1)+'초' },
 
+  { id:'e_amp', grp:'전송 설비', name:'쨔무 증폭기 증폭기', max:Infinity, req:s=>s.reb >= 6,
+    cost:n=>Math.ceil(5000*Math.pow(1.4,n)),
+    desc:'쨔무 증폭기 1레벨의 효과가 1 늘어난다.',
+    now:s=>'증폭기 1레벨당 +'+ampStep(s) },
+
+  { id:'e_crit', grp:'강화 설비', name:'쨔무 크리티컬 강화', max:Infinity, req:s=>s.reb >= 8,
+    cost:n=>Math.ceil(40000*Math.pow(1.5,n)),
+    desc:'크리티컬 쨔무쨔무의 배율이 10 늘어난다.',
+    now:s=>'크리티컬 ×'+fmt(critMul(s)) },
+
+  { id:'e_react', grp:'강화 설비', name:'더 강한 쨔무 반응', max:Infinity, req:s=>s.reb >= 10,
+    cost:n=>Math.ceil(150000*Math.pow(1.65,n)),
+    desc:'주인장 반응의 배율이 10 늘어난다.',
+    now:s=>'주인장 반응 ×'+fmt(ownMul(s)) },
+
   { id:'e_conv', grp:'생산 설비', name:'쨔무 컨베이어', max:40,
     cost:n=>Math.ceil(80*Math.pow(1.6,n)),
     desc:'매크로가 버는 쨔무가 25%씩 늘어난다.',
@@ -70,6 +91,11 @@ const EUP = [
     cost:n=>Math.ceil(100*Math.pow(1.7,n)),
     desc:'모든 쨔무 획득량이 25%씩 늘어난다.',
     now:s=>'획득량 ×'+(1+0.25*s.e_press).toFixed(2) },
+
+  { id:'e_srv', grp:'생산 설비', name:'서버 확장', max:8, req:s=>s.reb >= 4,
+    cost:n=>Math.ceil(1000*Math.pow(2.25,n)),
+    desc:'쨔무 자동완성 매크로의 최대 보유 수가 5대 늘어난다.',
+    now:s=>'매크로 최대 '+botMax(s)+'대' },
 
   { id:'e_fund', grp:'환생 설비', name:'쨔무 비상금', max:5,
     cost:n=>Math.ceil(200*Math.pow(5,n)),
@@ -86,6 +112,22 @@ const RANKS = [
 /* ── 상태 ─────────────────────────────────────── */
 const KEY = 'jjamu-save-v1';
 let s = fresh();
+// 콘솔 조작 등으로 빠지거나 깨진 값(undefined, NaN, 잘못된 타입)을 기본값으로 되돌린다
+function normalize(){
+  const base = fresh();
+  if(!s || typeof s !== 'object') s = base;
+  for(const k in base){
+    const d = base[k], v = s[k];
+    if(typeof d === 'number'){
+      if(v === Infinity) s[k] = Number.MAX_VALUE;                 // 넘친 값은 최대값으로
+      else if(typeof v !== 'number' || !isFinite(v)) s[k] = d;
+    }
+    else if(typeof d === 'boolean'){ if(typeof v !== 'boolean') s[k] = d; }
+    else if(d && typeof d === 'object'){ if(!v || typeof v !== 'object') s[k] = d; }
+  }
+  s.reb = Math.max(0, Math.floor(s.reb));
+  UP.concat(EUP).forEach(u=>{ s[u.id] = Math.max(0, Math.floor(s[u.id])); });
+}
 function fresh(){
   const o = { jamu:0, total:0, sends:0, combo:0, shopOpen:innerWidth>880, seen:{},
               reb:0, energy:0, energyTotal:0, facSeen:0, botMute:false, ts:Date.now() };
@@ -98,25 +140,36 @@ function cooldown(st){ return Math.max(0.35, baseCd(st)*Math.pow(0.93, st.thumb)
 function rebMul(st){ return 1 + st.reb; }                       // 환생 배율: 선형 증가
 function gMul(st){ return (1 + 0.12*st.fan) * Math.pow(2, st.meme) * rebMul(st) * (1 + 0.25*st.e_press); }
 function overMul(st){ return Math.pow(1.2, st.over); }
-function perSend(st){ return (1 + st.amp) * gMul(st); }
+function ampStep(st){ return 1 + st.e_amp; }                     // 증폭기 1레벨당 효과
+function perSend(st){ return (1 + st.amp * ampStep(st)) * gMul(st); }
 function botRate(st){ return st.bot * 0.2 * overMul(st) * gMul(st) * (1 + 0.25*st.e_conv); }
 function comboCap(st){ return 50 + 10*st.cap; }
+function critMul(st){ return 10 + 10*st.e_crit; }    // 크리티컬 배율: 강화 1회마다 +10
+function ownMul(st){ return 10 + 10*st.e_react; }    // 주인장 반응 배율: 강화 1회마다 +10
+function botMax(st){ return 10 + 5*st.e_srv; }
 function comboWin(st){ return 1800 + 300*st.e_combo; }          // ms
 function comboMul(){ return 1 + Math.min(s.combo, comboCap(s))*0.02; }
 function rebCost(st){ return 1e6 * Math.pow(10, st.reb); }      // 100만 → ×10씩
-function energyPer(st){ return st.reb > 0 ? Math.pow(2, st.reb - 1) : 0; }
+function eboostMul(st){ return 1 + 0.1*st.eboost; }
+function energyPer(st){ return st.reb > 0 ? Math.pow(3, st.reb - 1) * eboostMul(st) : 0; }
 function fundBonus(st){ return st.e_fund > 0 ? 1000*Math.pow(10, st.e_fund - 1) : 0; }
 function rebVisible(){ return s.total >= 1e5 || s.reb > 0; }
+function hasFactory(){ return s.reb >= 1; }
 
+const UNITS = [[1e48,'극'],[1e44,'재'],[1e40,'정'],[1e36,'간'],[1e32,'구'],[1e28,'양'],[1e24,'자'],
+  [1e20,'해'],[1e16,'경'],[1e12,'조'],[1e8,'억'],[1e4,'만']];
 function fmt(n){
   n = Math.floor(n);
   if(n < 10000) return n.toLocaleString('ko-KR');
-  const u = [[1e20,'해'],[1e16,'경'],[1e12,'조'],[1e8,'억'],[1e4,'만']];
+  if(n >= 1e52) return n.toExponential(2).replace('e+', 'e');   // 극(10^48)의 1만 배 이상
+  const u = UNITS;
   for(const [v,name] of u){
-    if(n >= v){ const q = n/v; return (q>=100 ? Math.floor(q).toLocaleString('ko-KR') : (Math.round(q*10)/10)) + name; }
+    // 나눗셈 오차(149.9999…)로 1이 깎이지 않도록 아주 작은 보정을 더한다
+    if(n >= v){ const q = n/v*(1 + 1e-12); return (q>=100 ? Math.floor(q).toLocaleString('ko-KR') : (Math.floor(q*10 + 0.5)/10)) + name; }
   }
   return String(n);
 }
+function fmtE(n){ return (n < 1000 && Math.abs(n - Math.round(n)) > 1e-9) ? String(Math.round(n*10)/10) : fmt(n); }
 function clock(){ return new Date().toLocaleTimeString('ko-KR',{hour:'numeric',minute:'2-digit'}); }
 function bumpEl(el){ el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 
@@ -196,12 +249,12 @@ function emoteRow(bd, gain, kind, anim, energy){
   if(gain){
     const g = document.createElement('span');
     g.className = 'gain';
-    if(kind.indexOf('crit') >= 0) g.appendChild(badge('크리티컬 ×10', 'crit'));
-    if(kind.indexOf('owner') >= 0) g.appendChild(badge('👑 주인장 반응 ×10', 'own'));
+    if(kind.indexOf('crit') >= 0) g.appendChild(badge('크리티컬 ×' + fmt(critMul(s)), 'crit'));
+    if(kind.indexOf('owner') >= 0) g.appendChild(badge('👑 주인장 반응 ×' + fmt(ownMul(s)), 'own'));
     g.appendChild(document.createTextNode('+' + fmt(gain) + ' 쨔무'));
     if(energy){
       const e = document.createElement('span');
-      e.className = 'en'; e.textContent = '+' + fmt(energy) + ' 에너지';
+      e.className = 'en'; e.textContent = '+' + fmtE(energy) + ' 에너지';
       g.appendChild(e);
     }
     row.appendChild(g);
@@ -266,7 +319,7 @@ function send(){
 
   const big = s.crit > 0 && Math.random() < s.crit*0.01;
   const own = s.react > 0 && Math.random() < s.react*0.01;
-  const gain = perSend(s) * comboMul() * (big ? 10 : 1) * (own ? 10 : 1);
+  const gain = perSend(s) * comboMul() * (big ? critMul(s) : 1) * (own ? ownMul(s) : 1);
   s.jamu += gain; s.total += gain; s.sends++;
 
   // 손으로 직접 보낼 때만 쨔무 에너지 생성: 2^(환생 - 1)
@@ -346,7 +399,7 @@ function setSide(open){
 menuBtn.addEventListener('click', ()=>setSide(!sideOpen));
 
 function setView(v){
-  if(v === 'factory' && s.reb < 1) v = 'main';
+  if(v === 'factory' && !hasFactory()) v = 'main';
   view = v;
   log.hidden = v !== 'main';
   factoryEl.hidden = v !== 'factory';
@@ -392,14 +445,14 @@ document.querySelectorAll('.ch[data-ch]').forEach(b=>{
   });
 });
 function paintChannels(){
-  chFactory.hidden = s.reb < 1;
+  chFactory.hidden = !hasFactory();
   facNew.hidden = !!s.facSeen;
   menuDot.classList.toggle('show', s.reb >= 1 && !s.facSeen);
 }
 
 /* ── 업그레이드 목록 공통 렌더러 ─────────────────── */
 function renderList(el, list, cache, have, unit, onBuy){
-  const sig = list.map(u=>u.id+':'+s[u.id]).join('|');
+  const sig = list.map(u=>u.id+':'+s[u.id]+':'+maxOf(u)).join('|');   // 최대치가 바뀌어도 다시 그림
   if(sig !== cache.sig){
     cache.sig = sig; el.innerHTML = ''; let grp = '';
     list.forEach(u=>{
@@ -408,17 +461,16 @@ function renderList(el, list, cache, have, unit, onBuy){
         const h = document.createElement('div'); h.className = 'grp'; h.textContent = grp;
         el.appendChild(h);
       }
-      const lv = s[u.id], maxed = lv >= u.max;
+      const lv = s[u.id], mx = maxOf(u), maxed = lv >= mx;
       const b = document.createElement('button');
       b.className = 'item' + (maxed ? ' maxed' : ''); b.dataset.id = u.id;
       b.innerHTML = '<span class="top"><span class="nm"></span><span class="cost"></span></span>'+
         '<p class="ds"></p><span class="bt"><span class="lv"></span>'+
         '<span class="track"><i></i></span><span class="now"></span></span>';
       b.querySelector('.nm').textContent = u.name;
-      b.querySelector('.ds').textContent = u.desc;
       b.querySelector('.cost').textContent = maxed ? '완료' : fmt(u.cost(lv)) + ' ' + unit;
-      b.querySelector('.lv').textContent = u.max < 900 ? 'Lv.'+lv+'/'+u.max : 'Lv.'+lv;
-      b.querySelector('.track i').style.width = (u.max < 900 ? Math.min(lv/u.max*100, 100) : Math.min(lv*2,100)) + '%';
+      b.querySelector('.lv').textContent = mx < 900 ? 'Lv.'+lv+'/'+mx : 'Lv.'+lv;
+      b.querySelector('.track i').style.width = (mx < 900 ? Math.min(lv/mx*100, 100) : Math.min(lv*2,100)) + '%';
       b.disabled = maxed;
       if(!maxed) b.addEventListener('click', ()=>onBuy(u));
       el.appendChild(b);
@@ -428,8 +480,9 @@ function renderList(el, list, cache, have, unit, onBuy){
     const u = list.find(x=>x.id === b.dataset.id);
     if(!u) return;
     b.querySelector('.now').textContent = u.now(s);
+    b.querySelector('.ds').textContent = descOf(u);
     const lv = s[u.id];
-    if(lv >= u.max) return;
+    if(lv >= maxOf(u)) return;
     const can = have() >= u.cost(lv);
     b.classList.toggle('can', can); b.disabled = !can;
   });
@@ -452,10 +505,14 @@ function setShop(open){
 shopBtn.addEventListener('click', ()=>setShop(!s.shopOpen));
 scrim.addEventListener('click', ()=>{ setShop(false); setSide(false); });
 
-function visible(u){ return s.total >= u.unlock || s[u.id] > 0; }
+function maxOf(u){ return typeof u.max === 'function' ? u.max(s) : u.max; }
+function descOf(u){ return typeof u.desc === 'function' ? u.desc(s) : u.desc; }
+function reqOk(u){ return !u.req || u.req(s); }
+function visible(u){ return reqOk(u) && (s.total >= (u.unlock || 0) || s[u.id] > 0); }
+function visibleE(u){ return reqOk(u) || s[u.id] > 0; }
 function buy(u){
   const lv = s[u.id];
-  if(lv >= u.max) return;
+  if(lv >= maxOf(u)) return;
   const c = u.cost(lv);
   if(s.jamu < c) return;
   s.jamu -= c; s[u.id] = lv + 1;
@@ -467,7 +524,7 @@ function paintShop(){
   paintRebirth();
 }
 function anyAffordable(){
-  return UP.some(u=>visible(u) && s[u.id] < u.max && s.jamu >= u.cost(s[u.id])) ||
+  return UP.some(u=>visible(u) && s[u.id] < maxOf(u) && s.jamu >= u.cost(s[u.id])) ||
          (rebVisible() && s.jamu >= rebCost(s));
 }
 function checkUnlocks(){
@@ -527,11 +584,15 @@ function rebirth(){
   shopCache.sig = ''; facCache.sig = '';
   sysMsg('<b>쨔무 환생 ' + s.reb + '회</b> 완료! 모든 쨔무 획득량 ×' + rebMul(s) +
     (s.jamu > 0 ? ', 비상금 ' + fmt(s.jamu) + ' 쨔무로 시작합니다.' : '.'), true);
+  // 이번 환생으로 새로 열린 업그레이드 알림
+  const before = Object.assign({}, s, {reb: s.reb - 1});
+  EUP.forEach(u=>{ if(u.req && u.req(s) && !u.req(before)) sysMsg('새 공장 설비 해금 — <b>'+u.name+'</b>', true); });
+  UP.forEach(u=>{ if(u.req && u.req(s) && !u.req(before)) sysMsg('새 업그레이드 해금 — <b>'+u.name+'</b>', true); });
   if(first){
     sysMsg('새 채널 <button class="mention" data-goto="factory">#쨔무-공장</button>이 생겼습니다. ' +
       '이제 손으로 직접 보낸 쨔무쨔무가 <b>쨔무 에너지</b>를 만듭니다.', true);
   }else{
-    sysMsg('손으로 보낼 때마다 쨔무 에너지 <b>+' + fmt(energyPer(s)) + '</b>', true);
+    sysMsg('손으로 보낼 때마다 쨔무 에너지 <b>+' + fmtE(energyPer(s)) + '</b>', true);
   }
   paintChannels(); paintWallet(); save();
 }
@@ -543,7 +604,7 @@ const facCache = {sig:''};
 
 function buyE(u){
   const lv = s[u.id];
-  if(lv >= u.max) return;
+  if(lv >= maxOf(u)) return;
   const c = u.cost(lv);
   if(s.energy < c) return;
   s.energy -= c; s[u.id] = lv + 1;
@@ -552,13 +613,14 @@ function buyE(u){
 }
 function paintFactory(){
   energyEl.textContent = fmt(s.energy);
-  facSub.textContent = '손으로 보낼 때마다 +' + fmt(energyPer(s)) + ' 에너지';
+  facSub.textContent = '손으로 보낼 때마다 +' + fmtE(energyPer(s)) + ' 에너지';
   facStats.innerHTML =
     '<div class="stat"><span>쨔무 환생</span><b>' + s.reb + '회</b></div>' +
     '<div class="stat"><span>환생 배율</span><b>×' + rebMul(s) + '</b></div>' +
-    '<div class="stat"><span>전송당 에너지</span><b>' + fmt(energyPer(s)) + '</b><small>2^(' + s.reb + '−1)</small></div>' +
+    '<div class="stat"><span>전송당 에너지</span><b>' + fmtE(energyPer(s)) + '</b><small>3^(' + s.reb + '−1)' +
+      (s.eboost > 0 ? ' ×' + eboostMul(s).toFixed(1) : '') + '</small></div>' +
     '<div class="stat"><span>다음 환생</span><b>' + fmt(rebCost(s)) + '</b><small>쨔무</small></div>';
-  renderList(facList, EUP, facCache, ()=>s.energy, '에너지', buyE);
+  renderList(facList, EUP.filter(visibleE), facCache, ()=>s.energy, '에너지', buyE);
 }
 
 /* ── 화면 갱신 ────────────────────────────────── */
@@ -573,6 +635,8 @@ let lastRank = '';
 function rankOf(t){ let r = RANKS[0][1]; for(const [v,n] of RANKS) if(t >= v) r = n; return r; }
 
 function paintWallet(bump){
+  paintChannels();
+  if(view === 'factory' && !hasFactory()){ setView('main'); return; }
   const txt = fmt(s.jamu);
   amtEl.textContent = txt; meJamu.textContent = txt;
   meEnergy.textContent = s.reb > 0 ? ' · ' + fmt(s.energy) + ' 에너지' : '';
@@ -590,7 +654,7 @@ function paintWallet(bump){
   voiceCnt.textContent = fmt(2 + Math.floor(v/9));
   totalTxt.textContent = '총 ' + fmt(s.total) + ' 쨔무 · 전송 ' + fmt(s.sends) + '회';
   draftX.textContent = '전송당 ' + fmt(perSend(s) * comboMul()) + ' 쨔무' +
-    (s.reb > 0 ? ' · ' + fmt(energyPer(s)) + ' 에너지' : '');
+    (s.reb > 0 ? ' · ' + fmtE(energyPer(s)) + ' 에너지' : '');
   if(bump) bumpEl(wallet);
   if(s.shopOpen) paintShop();
   if(view === 'factory') paintFactory();
@@ -603,6 +667,7 @@ let last = performance.now(), acc = 0, botAcc = 0, chatAt = 0, tick = 0, typeSig
 function breakCombo(){ s.combo = 0; }
 
 function loop(now){
+  normalize();
   const raw = now - last;
   const dt = Math.min(raw/1000, 0.5); last = now;
   if(raw > 2500) breakCombo();   // 탭 전환 등으로 루프가 멈췄던 경우
@@ -665,7 +730,16 @@ function loop(now){
 }
 
 /* ── 저장 ─────────────────────────────────────── */
-function save(){ try{ s.ts = Date.now(); localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){} }
+let savedOnce = false;
+function writeSave(){ s.ts = Date.now(); localStorage.setItem(KEY, JSON.stringify(s)); savedOnce = true; }
+function save(){
+  try{
+    // 이번 세션에 저장한 적이 있는데 세이브가 사라졌다 = 콘솔 등에서 지운 것.
+    // 메모리 상태로 덮어쓰면 지운 세이브가 되살아나므로, 대신 게임을 초기화한다.
+    if(savedOnce && localStorage.getItem(KEY) === null){ doReset(); return; }
+    writeSave();
+  }catch(e){}
+}
 const notices = [];
 function load(){
   try{
@@ -674,6 +748,7 @@ function load(){
     const o = JSON.parse(raw);
     if(!o || typeof o.jamu !== 'number') return false;
     s = Object.assign(fresh(), o); s.combo = 0;
+    normalize();
     if('botOff' in s){ s.botMute = !!s.botOff; delete s.botOff; }   // 매크로 끄기 → 메시지 숨김으로 변경
 
     const away = Math.min((Date.now() - (o.ts||Date.now()))/1000, 8*3600);
@@ -690,15 +765,23 @@ addEventListener('visibilitychange', ()=>{ if(document.hidden){ breakCombo(); sa
 addEventListener('pagehide', save);
 addEventListener('resize', updateScrim);
 
-// 처음부터: 두 번 눌러 확인 (브라우저 확인창은 일부 환경에서 막혀 있어 쓰지 않음)
+// 처음부터: 첫 클릭에 경고 alert → 3초 안에 한 번 더 누르면 초기화
+// (alert가 막힌 환경에서도 두 번 눌러 확인하는 절차는 그대로 동작)
+const RESET_WARNING =
+  '⚠️ 게임 초기화 경고\n\n' +
+  "'처음부터'는 게임을 완전히 초기화하며 되돌릴 수 없습니다.\n\n" +
+  "정말 초기화하려면 확인을 누른 뒤 3초 안에 '처음부터'를 한 번 더 누르세요.";
 const resetBtn = document.getElementById('reset');
 let resetAt = 0, resetUntil = 0, resetTimer = 0;
 resetBtn.addEventListener('click', ()=>{
   const now = performance.now();
   if(now < resetUntil && now - resetAt > 400){ clearTimeout(resetTimer); disarmReset(); doReset(); return; }
   if(now < resetUntil) return;
-  resetAt = now; resetUntil = now + 3000;
+  alert(RESET_WARNING);
+  // alert를 닫은 시점부터 3초를 센다 (경고를 읽는 동안 시간이 지나가지 않도록)
+  resetAt = performance.now(); resetUntil = resetAt + 3000;
   resetBtn.textContent = '한 번 더 누르면 초기화'; resetBtn.classList.add('armed');
+  clearTimeout(resetTimer);
   resetTimer = setTimeout(disarmReset, 3000);
 });
 function disarmReset(){ resetUntil = 0; resetBtn.textContent = '처음부터'; resetBtn.classList.remove('armed'); }
@@ -707,6 +790,7 @@ function doReset(){
   s = fresh(); shopCache.sig = ''; facCache.sig = ''; lastRank = ''; readyAt = 0;
   lastKey = ''; curBody = null; armUntil = 0;
   log.innerHTML = ''; intro(); setView('main'); setShop(s.shopOpen); paintWallet();
+  try{ writeSave(); }catch(e){}
 }
 
 /* ── 시작 ─────────────────────────────────────── */
