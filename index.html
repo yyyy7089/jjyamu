@@ -23,6 +23,7 @@
       <div class="cat">텍스트 채널</div>
       <button class="ch on" data-ch="main"><span class="h">#</span>쨔무쨔무-도배</button>
       <button class="ch" data-ch="factory" id="chFactory" hidden><span class="h">#</span>쨔무-공장<span class="new" id="facNew">NEW</span></button>
+      <button class="ch" data-ch="research" id="chResearch" hidden><span class="h">#</span>쨔무-연구<span class="new" id="resNew">NEW</span></button>
       <button class="ch lock" data-ch="notice"><span class="h">#</span>공지사항</button>
       <button class="ch lock" data-ch="free"><span class="h">#</span>자유수다</button>
       <button class="ch lock" data-ch="info"><span class="h">#</span>업그레이드-정보</button>
@@ -46,7 +47,9 @@
         <div class="nm"><i>#</i><span id="chName">쨔무쨔무-도배</span></div>
         <div class="topic" id="topicMain">서버원 <span id="viewers">12</span>명 · 내 등급 <b id="rank">뉴비</b><span id="rebTag"></span></div>
         <div class="topic" id="topicFac" hidden>손으로 직접 보낸 쨔무쨔무가 <b>쨔무 에너지</b>가 되는 곳</div>
+        <div class="topic" id="topicRes" hidden>쨔무와 쨔무 에너지를 <b>연구 포인트</b>로 바꿔 영구적인 연구를 진행하는 곳</div>
       </div>
+      <span class="goldtag" id="goldTag" hidden></span>
       <div class="wallet" id="wallet">
         <span class="amt" id="amt">0</span><span class="unit">쨔무</span>
         <span class="rate" id="rate"></span>
@@ -68,7 +71,36 @@
         </div>
         <div class="fac-stats" id="facStats"></div>
         <div class="fac-list" id="facList"></div>
-        <p class="fac-note">매크로가 보낸 쨔무쨔무는 에너지를 만들지 않습니다. 쨔무 에너지와 공장 설비는 환생해도 사라지지 않습니다.</p>
+        <p class="fac-note">쨔무 에너지와 공장 설비는 환생해도 사라지지 않습니다.</p>
+      </div>
+    </div>
+
+    <div class="factory" id="research" hidden>
+      <div class="fac-in">
+        <div class="fac-hero">
+          <img id="resEmote" alt="">
+          <div>
+            <div class="fac-lbl">연구 포인트</div>
+            <div class="fac-amt" id="rpAmt">0</div>
+            <div class="fac-sub" id="rpSub"></div>
+          </div>
+        </div>
+        <div class="conv-row">
+          <div class="conv">
+            <div><span>쨔무로 전환</span><b id="convJamuCost"></b></div>
+            <button class="dbtn" id="convJamu">+1 포인트</button>
+          </div>
+          <div class="conv">
+            <div><span>쨔무 에너지로 전환</span><b id="convEnergyCost"></b></div>
+            <button class="dbtn" id="convEnergy">+1 포인트</button>
+          </div>
+        </div>
+        <div class="fac-list" id="resList"></div>
+        <div class="res-ft">
+          <p>연구는 즉시 적용되고 환생해도 사라지지 않습니다. <b>연구 초기화</b>를 누르면 연구를 모두 되돌려
+          연구 포인트를 전부 돌려받는 대신, 그 순간 환생과 같은 정리가 일어납니다. 환생 횟수는 늘지 않습니다.</p>
+          <button class="dbtn" id="resReset">연구 초기화</button>
+        </div>
       </div>
     </div>
 
@@ -108,12 +140,44 @@
       </div>
       <div class="shop-ft">
         <span id="totalTxt">총 0 쨔무 획득</span>
+        <button id="dataBtn">저장 데이터</button>
         <button id="reset">처음부터</button>
       </div>
     </div>
   </aside>
 
   <div class="scrim" id="scrim"></div>
+</div>
+
+<div class="modal" id="dataModal" hidden>
+  <div class="modal-bg" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dataTitle">
+    <div class="modal-hd">
+      <h2 id="dataTitle">저장 데이터</h2>
+      <button class="x" data-close aria-label="닫기">✕</button>
+    </div>
+    <section class="dsec">
+      <h3>내보내기</h3>
+      <p>이 코드를 보관해 두면 다른 기기나 브라우저에서 그대로 이어서 할 수 있습니다.</p>
+      <textarea id="exportCode" readonly rows="4" spellcheck="false" aria-label="내보낸 저장 코드"></textarea>
+      <div class="drow">
+        <span class="dmsg" id="exportMsg" aria-live="polite"></span>
+        <button class="dbtn" id="exportFile">파일로 저장</button>
+        <button class="dbtn primary" id="exportCopy">복사</button>
+      </div>
+    </section>
+    <section class="dsec">
+      <h3>가져오기</h3>
+      <p>저장 코드를 붙여넣거나 저장 파일을 여세요. 지금 진행 상황은 덮어씌워집니다.</p>
+      <textarea id="importCode" rows="4" spellcheck="false" placeholder="JJAMU1:…" aria-label="가져올 저장 코드"></textarea>
+      <div class="drow">
+        <span class="dmsg" id="importMsg" aria-live="polite"></span>
+        <button class="dbtn" id="importFileBtn">파일 열기</button>
+        <input type="file" id="importFile" accept=".txt,text/plain" hidden>
+        <button class="dbtn" id="importGo">불러오기</button>
+      </div>
+    </section>
+  </div>
 </div>
 
 <script src="game.js"></script>
