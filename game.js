@@ -1,5 +1,5 @@
 const EMOTE = "jjamu.png";
-['srvIcon','meAv','draftEmote','facEmote','resEmote'].forEach(id=>document.getElementById(id).src = EMOTE);
+['srvIcon','meAv','draftEmote','facEmote','resEmote','chalEmote'].forEach(id=>document.getElementById(id).src = EMOTE);
 
 /* ── 쨔무 업그레이드 (환생 시 초기화) ─────────────── */
 const UP = [
@@ -140,6 +140,16 @@ const RESEARCH = [
     desc:'요구량을 10배 이상 넘겨 모았다면 한 번에 여러 번 환생한다.' },
 ];
 
+/* ── 쨔무 챌린지 (연구와 함께 환생 10회에 열림) ── */
+const CHAL_GOALS = [1e12, 1e16, 1e20];
+const CHALLENGES = [
+  { n:1, name:'매크로 정지', desc:'쨔무 자동완성 매크로의 효과가 사라진다.' },
+  { n:2, name:'무반응 채팅', desc:'1번의 제약에 더해, 크리티컬과 주인장 반응이 일어나지 않는다.' },
+  { n:3, name:'혼자만의 도배', desc:'2번의 제약에 더해, 쨔무 따라쟁이의 효과가 사라진다.' },
+  { n:4, name:'연구 정전', desc:'3번의 제약에 더해, 모든 쨔무 연구의 효과가 사라진다.' },
+  { n:5, name:'맨손 전송', desc:'4번의 제약에 더해, 모든 전송 설비(냉각기·콤보 안정기·증폭기 증폭기·연타 감각)의 효과가 사라진다.' },
+];
+
 const RANKS = [
   [0,'뉴비'],[150,'눈팅 탈출'],[1200,'채팅 참여러'],[9000,'이모티콘 애호가'],
   [70000,'도배 견습생'],[600000,'쨔무 장인'],[2e7,'채팅방 지배자'],[5e8,'쨔무 중독자'],
@@ -167,46 +177,52 @@ function normalize(){
   s.rpEnergy = Math.max(0, Math.floor(s.rpEnergy));
   UP.concat(EUP).forEach(u=>{ s[u.id] = Math.max(0, Math.floor(s[u.id])); });
   RESEARCH.forEach(r=>{ s[r.id] = s[r.id] ? 1 : 0; });
+  s.chal = Math.min(5, Math.max(0, Math.floor(s.chal)));
+  for(let i = 1; i <= 5; i++) s['chal'+i] = Math.min(3, Math.max(0, Math.floor(s['chal'+i])));
 }
 function fresh(){
   const o = { jamu:0, total:0, sends:0, combo:0, shopOpen:innerWidth>880, seen:{},
               reb:0, energy:0, energyTotal:0, facSeen:0, botMute:false,
-              rpJamu:0, rpEnergy:0, resSeen:0, ts:Date.now() };
+              rpJamu:0, rpEnergy:0, resSeen:0,
+              chal:0, chal1:0, chal2:0, chal3:0, chal4:0, chal5:0, chalSeen:0, ts:Date.now() };
   UP.forEach(u=>o[u.id]=0);
   EUP.forEach(u=>o[u.id]=0);
   RESEARCH.forEach(r=>o[r.id]=0);
   return o;
 }
-function baseCd(st){ return 4*Math.pow(0.92, st.e_cool); }
-function cdFloor(st){ return st.r_floor ? 0.25 : 0.35; }        // 쿨타임 한계 돌파 연구
+function baseCd(st){ return 4*Math.pow(0.92, useGear(st,'e_cool')); }
+function cdFloor(st){ return useRes(st,'r_floor') ? 0.25 : 0.35; }        // 쿨타임 한계 돌파 연구
 function cooldown(st){ return Math.max(cdFloor(st), baseCd(st)*Math.pow(0.93, st.thumb)); }
 function rebMul(st){                                             // 환생 배율: 선형 + (환생 가속 연구)
-  return (1 + st.reb) * (st.r_rebmul ? Math.pow(1.2, Math.max(0, st.reb - 9)) : 1);
+  return (1 + st.reb) * (useRes(st,'r_rebmul') ? Math.pow(1.2, Math.max(0, st.reb - 9)) : 1);
 }
 function goldMul(){ return goldUntil > performance.now() ? 10 : 1; }   // 황금 쨔무쨔무 버프
-function gMul(st){ return (1 + 0.12*st.fan) * Math.pow(2, st.meme) * rebMul(st) * (1 + 0.25*st.e_press) * goldMul(); }
+function gMul(st){
+  return (1 + 0.12*(noFan() ? 0 : st.fan)) * Math.pow(2, st.meme) * rebMul(st) *
+         (1 + 0.25*st.e_press) * goldMul() * chalMul();
+}
 function overMul(st){ return Math.pow(1.2, st.over); }
-function ampStep(st){ return 1 + st.e_amp; }                     // 증폭기 1레벨당 효과
+function ampStep(st){ return 1 + useGear(st,'e_amp'); }                     // 증폭기 1레벨당 효과
 function perSend(st){ return (1 + st.amp * ampStep(st)) * gMul(st); }
 function botSends(st){ return st.bot * overMul(st) / 5; }        // 매크로가 초당 보내는 횟수
 function botEventMul(st){                                        // 매크로에 적용되는 크리티컬·반응 기대 배율
-  if(!st.r_botcrit) return 1;
+  if(!useRes(st,'r_botcrit')) return 1;
   return (1 + st.crit*0.01*(critMul(st)/10 - 1)) * (1 + st.react*0.01*(ownMul(st)/10 - 1));
 }
-function botRate(st){ return botSends(st) * gMul(st) * (1 + 0.25*st.e_conv) * botEventMul(st); }
-function botEnergyRate(st){ return st.r_botenergy ? botSends(st) * energyPer(st) * 0.00025 : 0; }
+function botRate(st){ return noMacro() ? 0 : botSends(st) * gMul(st) * (1 + 0.25*st.e_conv) * botEventMul(st); }
+function botEnergyRate(st){ return (useRes(st,'r_botenergy') && !noMacro()) ? botSends(st) * energyPer(st) * 0.00025 : 0; }
 function comboCap(st){ return 50 + 10*st.cap; }
 function critMul(st){ return 10 + 10*st.e_crit; }    // 크리티컬 배율: 강화 1회마다 +10
 function ownMul(st){ return 10 + 10*st.e_react; }    // 주인장 반응 배율: 강화 1회마다 +10
 function botMax(st){ return 10 + 5*st.e_srv; }
-function comboWin(st){ return 1800 + 300*st.e_combo; }          // ms
-function comboStep(st){ return 2 + st.sense; }                   // 콤보 1당 획득량 %
+function comboWin(st){ return 1800 + 300*useGear(st,'e_combo'); }          // ms
+function comboStep(st){ return 2 + useGear(st,'sense'); }                   // 콤보 1당 획득량 %
 function comboMul(){ return 1 + Math.min(s.combo, comboCap(s))*comboStep(s)/100; }
-function rebStep(st){ return st.r_cost ? 8 : 10; }               // 환생 절약 연구
+function rebStep(st){ return useRes(st,'r_cost') ? 8 : 10; }               // 환생 절약 연구
 function costAt(st, reb){ return 1e6 * Math.pow(rebStep(st), reb); }
 function rebCost(st){ return costAt(st, st.reb); }               // 100만에서 시작
 function rebTimes(){                                             // 한 번에 진행할 환생 횟수 (연속 환생 연구)
-  if(!s.r_multi) return 1;
+  if(!useRes(s,'r_multi')) return 1;
   let k = 0;
   while(k < 200 && s.jamu >= costAt(s, s.reb + k)) k++;
   return Math.max(1, k);
@@ -215,18 +231,33 @@ function eboostMul(st){ return 1 + 0.1*st.eboost; }
 function energyPer(st){ return st.reb > 0 ? Math.pow(3, st.reb - 1) * eboostMul(st) : 0; }
 function fundBonus(st){ return st.e_fund > 0 ? 1000*Math.pow(10, st.e_fund - 1) : 0; }
 function rebVisible(){ return s.total >= 1e5 || s.reb > 0; }
+// 챌린지: s.chal이 진행 중인 번호(0이면 아님). 번호가 클수록 제약이 쌓인다.
+// 챌린지 번호 = 제약 단계. 번호가 클수록 앞 제약을 그대로 물려받는다.
+function noMacro(){ return s.chal >= 1; }
+function noCrit(){ return s.chal >= 2; }
+function noFan(){ return s.chal >= 3; }
+function noRes(){ return s.chal >= 4; }
+function noGear(){ return s.chal >= 5; }
+function useRes(st, id){ return noRes() ? 0 : st[id]; }          // 연구 효과
+function useGear(st, id){ return noGear() ? 0 : st[id]; }        // 전송 설비 효과
+function chalDone(n){ return s['chal'+n] | 0; }
+function chalTotal(){ let t = 0; for(let i = 1; i <= 5; i++) t += chalDone(i); return t; }
+function chalMul(){ return Math.pow(1.5, chalTotal()); }         // 달성 1회마다 ×1.5
+function chalGoal(n){ return CHAL_GOALS[Math.min(chalDone(n), CHAL_GOALS.length - 1)]; }
+function chalOpen(n){ return n === 1 || chalDone(n - 1) > 0; }
+function hasChallenge(){ return s.reb >= 10 || chalTotal() > 0 || s.chal > 0; }
 function rpJamuCost(st){ return 1e13 * Math.pow(1e3, st.rpJamu); }
 function rpEnergyCost(st){ return 1e7 * Math.pow(1e2, st.rpEnergy); }
-function rpEarned(st){ return st.rpJamu + st.rpEnergy; }
+function rpEarned(st){ return st.rpJamu + st.rpEnergy + chalTotal(); }   // 챌린지 달성 1회당 1점
 function rpSpent(st){ let n = 0; RESEARCH.forEach(r=>{ if(st[r.id]) n += r.rp; }); return n; }
 function rpLeft(st){ return rpEarned(st) - rpSpent(st); }
 function hasResearch(){ return s.reb >= 10 || rpEarned(s) > 0 || rpSpent(s) > 0; }
 function freeUp(u){                                              // 무상 지원 연구가 적용된 분류
-  return (u.grp === '손가락' && s.r_finger) || (u.grp === '서버' && s.r_server) ||
-         (u.grp === '자동화' && s.r_auto) || (u.grp === '공장' && s.r_factory);
+  return (u.grp === '손가락' && useRes(s,'r_finger')) || (u.grp === '서버' && useRes(s,'r_server')) ||
+         (u.grp === '자동화' && useRes(s,'r_auto')) || (u.grp === '공장' && useRes(s,'r_factory'));
 }
 function keepUp(u){                                              // 환생해도 유지되는 분류
-  return (u.grp === '자동화' && s.r_auto) || (u.grp === '공장' && s.r_factory);
+  return (u.grp === '자동화' && useRes(s,'r_auto')) || (u.grp === '공장' && useRes(s,'r_factory'));
 }
 function spendOf(u, lv){ return freeUp(u) ? 0 : u.cost(lv); }   // 요구량은 그대로, 차감만 면제
 function hasFactory(){ return s.reb >= 1; }
@@ -391,11 +422,11 @@ let goldAt = 0, goldUntil = 0, goldLive = null, goldGone = 0;   // 황금 쨔무
 function send(){
   const now = performance.now();
   if(now < readyAt) return;
-  const big = s.crit > 0 && Math.random() < s.crit*0.01;
-  const own = s.react > 0 && Math.random() < s.react*0.01;
+  const big = !noCrit() && s.crit > 0 && Math.random() < s.crit*0.01;
+  const own = !noCrit() && s.react > 0 && Math.random() < s.react*0.01;
 
   // 콤보 창은 [readyAt, readyAt + comboWin] — 화면 갱신 여부와 무관하게 판정
-  const step = (big && s.r_combo) ? 10 : 1;                      // 크리티컬 콤보 연구
+  const step = (big && useRes(s,'r_combo')) ? 10 : 1;                      // 크리티컬 콤보 연구
   if(s.combo > 0 && now <= readyAt + comboWin(s)) s.combo = Math.min(s.combo + step, comboCap(s));
   else s.combo = Math.min(step, comboCap(s));
   // 리액션을 먼저 정한다. 달리는 조건은 그대로 두고, 개수만 배율로 쓴다 (리액션 증폭 연구)
@@ -406,7 +437,7 @@ function send(){
     pills.push({n: 1 + Math.floor(Math.random()*s.fan)});
   let pillN = 0;
   pills.forEach(p=>{ if(p.n) pillN += p.n; });
-  const pillMul = (s.r_pillmul && pillN > 0) ? pillN : 1;
+  const pillMul = (useRes(s,'r_pillmul') && pillN > 0) ? pillN : 1;
 
   const gain = perSend(s) * comboMul() * (big ? critMul(s) : 1) * (own ? ownMul(s) : 1) * pillMul;
   s.jamu += gain; s.total += gain; s.sends++;
@@ -479,7 +510,7 @@ function spawnGold(now){
   const li = document.createElement('li');
   li.className = 'goldwrap';
   const btn = document.createElement('button');
-  btn.className = 'gold'; btn.dataset.gold = '1';
+  btn.className = 'goldcatch'; btn.dataset.gold = '1';
   const img = document.createElement('img'); img.src = EMOTE; img.alt = '';
   const txt = document.createElement('span');
   txt.innerHTML = '<b>황금 쨔무쨔무</b>가 지나갑니다! 누르면 30초 동안 모든 쨔무 획득량 ×10';
@@ -512,7 +543,10 @@ const side = document.getElementById('side'), menuBtn = document.getElementById(
       topicFac = document.getElementById('topicFac'), factoryEl = document.getElementById('factory'),
       topicRes = document.getElementById('topicRes'), researchEl = document.getElementById('research'),
       chResearch = document.getElementById('chResearch'), resNew = document.getElementById('resNew'),
-      chMain = document.querySelector('.ch[data-ch="main"]'), goldTag = document.getElementById('goldTag');
+      chMain = document.querySelector('.ch[data-ch="main"]'), goldTag = document.getElementById('goldTag'),
+      topicChal = document.getElementById('topicChal'), challengeEl = document.getElementById('challenge'),
+      chChallenge = document.getElementById('chChallenge'), chalNew = document.getElementById('chalNew'),
+      chalTag = document.getElementById('chalTag');
 let view = 'main', sideOpen = false;
 
 function mobile(){ return innerWidth <= 880; }
@@ -528,17 +562,22 @@ menuBtn.addEventListener('click', ()=>setSide(!sideOpen));
 function setView(v){
   if(v === 'factory' && !hasFactory()) v = 'main';
   if(v === 'research' && !hasResearch()) v = 'main';
+  if(v === 'challenge' && !hasChallenge()) v = 'main';
   view = v;
   log.hidden = v !== 'main';
   factoryEl.hidden = v !== 'factory';
   researchEl.hidden = v !== 'research';
+  challengeEl.hidden = v !== 'challenge';
   topicMain.hidden = v !== 'main';
   topicFac.hidden = v !== 'factory';
   topicRes.hidden = v !== 'research';
-  chName.textContent = v === 'main' ? '쨔무쨔무-도배' : (v === 'factory' ? '쨔무-공장' : '쨔무-연구');
+  topicChal.hidden = v !== 'challenge';
+  chName.textContent = v === 'main' ? '쨔무쨔무-도배'
+    : v === 'factory' ? '쨔무-공장' : v === 'research' ? '쨔무-연구' : '쨔무-챌린지';
   document.querySelectorAll('.ch[data-ch]').forEach(b=>b.classList.toggle('on', b.dataset.ch === v));
   if(v === 'factory'){ s.facSeen = 1; paintFactory(); }
   else if(v === 'research'){ s.resSeen = 1; paintResearch(); }
+  else if(v === 'challenge'){ s.chalSeen = 1; paintChallenge(); }
   else log.scrollTop = log.scrollHeight;
   paintChannels();
   setSide(false);
@@ -568,7 +607,7 @@ const CH_MSG = {
 document.querySelectorAll('.ch[data-ch]').forEach(b=>{
   b.addEventListener('click', ()=>{
     const k = b.dataset.ch;
-    if(k === 'main' || k === 'factory' || k === 'research'){ setView(k); return; }
+    if(k === 'main' || k === 'factory' || k === 'research' || k === 'challenge'){ setView(k); return; }
     setView('main');
     if(k === 'credit'){ credits(); return; }
     sysMsg(CH_MSG[k]);
@@ -581,8 +620,10 @@ function paintChannels(){
   facNew.hidden = !!s.facSeen;
   chResearch.hidden = !hasResearch();
   resNew.hidden = !!s.resSeen;
+  chChallenge.hidden = !hasChallenge();
+  chalNew.hidden = !!s.chalSeen;
   menuDot.classList.toggle('show', (hasFactory() && !s.facSeen) || (hasResearch() && !s.resSeen) ||
-    (!!goldLive && view !== 'main'));
+    (hasChallenge() && !s.chalSeen) || (!!goldLive && view !== 'main'));
 }
 
 /* ── 업그레이드 목록 공통 렌더러 ─────────────────── */
@@ -692,12 +733,13 @@ function paintRebirth(){
   const show = rebVisible();
   rebBox.hidden = !show;
   if(!show) return;
-  const cost = rebCost(s), can = s.jamu >= cost, now = performance.now();
+  const cost = rebCost(s), can = !s.chal && s.jamu >= cost, now = performance.now();
   if(!can) armUntil = 0;
   const armed = can && now < armUntil;
   rebCostEl.textContent = fmt(cost) + ' 쨔무';
-  rebDesc.textContent = '보유 쨔무와 모든 쨔무 업그레이드를 초기화하고, 모든 쨔무 획득량 배율을 영구히 올린다. ' +
-    (s.r_multi ? '요구량을 여러 번 넘겨 모았다면 한 번에 그만큼 환생한다.'
+  rebDesc.textContent = (s.chal ? '쨔무 챌린지 중에는 환생할 수 없다. 챌린지를 마치거나 나간 뒤에 가능하다. ' : '') +
+    '보유 쨔무와 모든 쨔무 업그레이드를 초기화하고, 모든 쨔무 획득량 배율을 영구히 올린다. ' +
+    (useRes(s,'r_multi') ? '요구량을 여러 번 넘겨 모았다면 한 번에 그만큼 환생한다.'
                : '요구량보다 많이 모아도 한 번에 1회만 환생한다.') +
     (s.reb === 0 ? ' 첫 환생 시 #쨔무-공장이 열린다.' : '');
   rebLv.textContent = s.reb + '회';
@@ -726,6 +768,7 @@ function wipeProgress(){
   shopCache.sig = ''; facCache.sig = ''; resCache.sig = '';
 }
 function rebirth(){
+  if(s.chal) return;                       // 챌린지 중에는 환생할 수 없다
   if(s.jamu < rebCost(s)) return;
   const first = s.reb === 0, prev = s.reb;
   const times = rebTimes();                // 연속 환생 연구가 없으면 1
@@ -868,6 +911,101 @@ function disarmResReset(){
   resUntil = 0; resResetBtn.textContent = '연구 초기화'; resResetBtn.classList.remove('armed');
 }
 
+/* ── 쨔무 챌린지 ──────────────────────────────── */
+const chalAmt = document.getElementById('chalAmt'), chalLbl = document.getElementById('chalLbl'),
+      chalSub = document.getElementById('chalSub'), chalBar = document.getElementById('chalBar'),
+      chalBarWrap = document.getElementById('chalBarWrap'), chalExit = document.getElementById('chalExit'),
+      chalList = document.getElementById('chalList');
+const chalCache = {sig:''};
+let chalArmAt = 0, chalArmUntil = 0, chalArmN = 0, chalTimer = 0;
+
+function disarmChal(){
+  chalArmN = 0; chalArmUntil = 0; clearTimeout(chalTimer);
+  chalExit.textContent = '챌린지 나가기'; chalExit.classList.remove('armed');
+  chalCache.sig = '';
+}
+function enterChal(n){
+  if(s.chal || !chalOpen(n) || chalDone(n) >= 3) return;
+  wipeProgress(); clearGold();
+  s.chal = n;
+  setView('main');
+  sysMsg('<b>쨔무 챌린지 ' + n + '</b>에 들어갔습니다. 목표 <b>' + fmt(chalGoal(n)) + ' 쨔무</b> · ' +
+    CHALLENGES[n-1].desc, true);
+  chalCache.sig = ''; paintChannels(); paintWallet(); save();
+}
+function leaveChal(done){
+  const n = s.chal;
+  if(!n) return;
+  s.chal = 0;
+  if(done) s['chal'+n] = Math.min(3, chalDone(n) + 1);
+  wipeProgress(); clearGold();
+  setView('main');
+  if(done) sysMsg('<b>쨔무 챌린지 ' + n + ' 달성!</b> 모든 쨔무 획득량 ×1.5, 연구 포인트 1점을 받았습니다. ' +
+    '(누적 ×' + chalMul().toFixed(2) + ')', true);
+  else sysMsg('쨔무 챌린지 ' + n + '에서 나왔습니다. 제약이 모두 풀렸습니다.', true);
+  chalCache.sig = ''; paintChannels(); paintWallet(); save();
+}
+chalExit.addEventListener('click', ()=>{
+  if(!s.chal) return;
+  const now = performance.now();
+  if(chalArmN === -1 && now < chalArmUntil && now - chalArmAt > 400){ disarmChal(); leaveChal(false); return; }
+  if(now < chalArmUntil && chalArmN === -1) return;
+  chalArmN = -1; chalArmAt = now; chalArmUntil = now + 3000;
+  chalExit.textContent = '한 번 더 누르면 나가기'; chalExit.classList.add('armed');
+  clearTimeout(chalTimer); chalTimer = setTimeout(disarmChal, 3000);
+});
+function tapChal(n){
+  if(s.chal || !chalOpen(n) || chalDone(n) >= 3) return;
+  const now = performance.now();
+  if(chalArmN === n && now < chalArmUntil && now - chalArmAt > 400){ disarmChal(); enterChal(n); return; }
+  chalArmN = n; chalArmAt = now; chalArmUntil = now + 3000;
+  chalCache.sig = ''; paintChallenge();
+  clearTimeout(chalTimer); chalTimer = setTimeout(()=>{ disarmChal(); paintChallenge(); }, 3000);
+}
+function paintChallenge(){
+  const inChal = s.chal > 0, now = performance.now();
+  if(chalArmUntil && now > chalArmUntil) disarmChal();
+  if(inChal){
+    const goal = chalGoal(s.chal);
+    chalLbl.textContent = '쨔무 챌린지 ' + s.chal + ' 진행 중 — ' + CHALLENGES[s.chal-1].name;
+    chalAmt.textContent = fmt(s.jamu) + ' / ' + fmt(goal);
+    chalSub.textContent = CHALLENGES[s.chal-1].desc + ' 목표를 달성하면 자동으로 끝납니다.';
+    chalBarWrap.hidden = false;
+    chalBar.style.width = Math.min(s.jamu/goal*100, 100) + '%';
+  }else{
+    chalLbl.textContent = '챌린지 보너스';
+    chalAmt.textContent = '×' + chalMul().toFixed(2);
+    chalSub.textContent = '총 ' + chalTotal() + '회 달성 · 연구 포인트 ' + chalTotal() + '점 획득';
+    chalBarWrap.hidden = true;
+  }
+  chalExit.hidden = !inChal;
+
+  const sig = CHALLENGES.map(c=>chalDone(c.n)).join('') + ':' + s.chal + ':' + chalArmN;
+  if(sig !== chalCache.sig){
+    chalCache.sig = sig; chalList.innerHTML = '';
+    CHALLENGES.forEach(c=>{
+      const done = chalDone(c.n), open = chalOpen(c.n), full = done >= 3, active = s.chal === c.n;
+      const b = document.createElement('button');
+      b.className = 'item chal' + (active ? ' active' : '') + (full ? ' done' : '');
+      b.dataset.chal = c.n;
+      b.innerHTML = '<span class="top"><span class="nm"></span><span class="cost"></span></span>' +
+        '<p class="ds"></p><span class="bt"><span class="lv"></span>' +
+        '<span class="track"><i></i></span><span class="now"></span></span>';
+      b.querySelector('.nm').textContent = '챌린지 ' + c.n + ' · ' + c.name;
+      b.querySelector('.ds').textContent = open ? c.desc : '앞 챌린지를 한 번 이상 달성하면 열립니다.';
+      b.querySelector('.cost').textContent = !open ? '잠김' : full ? '완료' : '목표 ' + fmt(chalGoal(c.n));
+      b.querySelector('.lv').textContent = '달성 ' + done + '/3';
+      b.querySelector('.track i').style.width = (done/3*100) + '%';
+      b.querySelector('.now').textContent = active ? '진행 중' : full ? '' :
+        (chalArmN === c.n ? '한 번 더 누르면 진입' : (s.chal ? '다른 챌린지 진행 중' : '누르면 진입'));
+      b.disabled = !open || full || !!s.chal;
+      if(!b.disabled) b.addEventListener('click', ()=>tapChal(c.n));
+      if(chalArmN === c.n) b.classList.add('can');
+      chalList.appendChild(b);
+    });
+  }
+}
+
 /* ── 화면 갱신 ────────────────────────────────── */
 const amtEl = document.getElementById('amt'), rateEl = document.getElementById('rate'),
       rankEl = document.getElementById('rank'), viewEl = document.getElementById('viewers'),
@@ -883,6 +1021,7 @@ function paintWallet(bump){
   paintChannels();
   if(view === 'factory' && !hasFactory()){ setView('main'); return; }
   if(view === 'research' && !hasResearch()){ setView('main'); return; }
+  if(view === 'challenge' && !hasChallenge()){ setView('main'); return; }
   const txt = fmt(s.jamu);
   amtEl.textContent = txt; meJamu.textContent = txt;
   meEnergy.textContent = s.reb > 0 ? ' · ' + fmt(s.energy) + ' 에너지' : '';
@@ -905,6 +1044,9 @@ function paintWallet(bump){
   if(s.shopOpen) paintShop();
   if(view === 'factory') paintFactory();
   if(view === 'research') paintResearch();
+  if(view === 'challenge') paintChallenge();
+  chalTag.hidden = !s.chal;
+  if(s.chal) chalTag.textContent = '챌린지 ' + s.chal + ' · 목표 ' + fmt(chalGoal(s.chal));
   dot.classList.toggle('show', !s.shopOpen && anyAffordable());
 }
 
@@ -924,7 +1066,9 @@ function loop(now){
   const ber = botEnergyRate(s);                                  // 매크로 발전 연구
   if(ber > 0){ s.energy += ber*dt; s.energyTotal += ber*dt; }
 
-  if(s.bot > 0 && !s.botMute){
+  if(s.chal && s.jamu >= chalGoal(s.chal)) leaveChal(true);      // 챌린지 목표 달성
+
+  if(s.bot > 0 && !s.botMute && !noMacro()){
     botAcc += dt * Math.min(s.bot * overMul(s) / 5, 3);
     if(botAcc >= 1 && now - chatAt > 280){
       botAcc = 0; chatAt = now;
@@ -943,7 +1087,7 @@ function loop(now){
   }
 
   // 황금 쨔무쨔무
-  if(s.r_gold){
+  if(useRes(s,'r_gold')){
     if(!goldAt) goldAt = now + goldDelay();
     else if(!goldLive && now >= goldAt) spawnGold(now);
   }
