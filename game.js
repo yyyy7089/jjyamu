@@ -13,18 +13,18 @@ const UP = [
     desc:s=>'한 번 보낼 때 얻는 쨔무가 ' + ampStep(s) + ' 늘어난다.',
     now:s=>'전송당 '+fmt(perSend(s))+' 쨔무' },
 
-  { id:'crit', grp:'손가락', name:'크리티컬 쨔무쨔무', max:40, unlock:2500,
+  { id:'crit', grp:'손가락', name:'크리티컬 쨔무쨔무', max:s=>eventMax(s), unlock:2500,
     cost:n=>Math.ceil(500*Math.pow(1.75,n)),
     desc:s=>'1%p 확률로 더 큰 쨔무쨔무가 전송되어 획득량이 ' + fmt(critMul(s)) + '배가 된다.',
     now:s=>'확률 '+s.crit+'%' },
 
-  { id:'react', grp:'손가락', name:'쨔무 리액션', max:40, unlock:30000,
+  { id:'react', grp:'손가락', name:'쨔무 리액션', max:s=>eventMax(s), unlock:30000,
     cost:n=>Math.ceil(2000*Math.pow(1.75,n)),
     desc:s=>'1%p 확률로 서버 주인이 내 쨔무쨔무에 반응해 획득량이 ' + fmt(ownMul(s)) + '배가 된다. ' +
       '크리티컬과 같이 터지면 ' + fmt(critMul(s)*ownMul(s)) + '배.',
     now:s=>'확률 '+s.react+'%' },
 
-  { id:'cap', grp:'손가락', name:'쨔무 연타 근성', max:15, unlock:5000,
+  { id:'cap', grp:'손가락', name:'쨔무 연타 근성', max:s=>capMax(s), unlock:5000,
     cost:n=>Math.ceil(1500*Math.pow(2.2,n)),
     desc:'연타 콤보 상한이 10 올라간다.',
     now:s=>'콤보 상한 '+comboCap(s) },
@@ -49,8 +49,8 @@ const UP = [
     desc:'쨔무쨔무가 유행을 타 모든 쨔무 획득량이 2배가 된다.',
     now:s=>'유행 ×'+Math.pow(2,s.meme) },
 
-  { id:'eboost', grp:'공장', name:'쨔무 에너지 부스트', max:Infinity, unlock:0, req:s=>s.reb >= 8,
-    cost:n=>Math.ceil(10000*Math.pow(2,n)),
+  { id:'eboost', grp:'공장', name:'쨔무 에너지 부스트', max:s=>boostMax(s), unlock:0, req:s=>s.reb >= 8,
+    cost:n=>boostCost(n),
     desc:'손으로 보낼 때 얻는 쨔무 에너지가 10%p 늘어난다.',
     now:s=>'에너지 ×'+eboostMul(s).toFixed(1) },
 ];
@@ -77,6 +77,21 @@ const EUP = [
     desc:'연타 콤보 1당 획득량이 1%p 더 늘어난다.',
     now:s=>'콤보 1당 +'+comboStep(s)+'%' },
 
+  { id:'e_amp3', grp:'전송 설비', name:'쨔무 (증폭기)³', max:Infinity, req:s=>s.reb >= 20,
+    cost:n=>Math.ceil(1e13*Math.pow(3,n)),
+    desc:'쨔무 증폭기 증폭기 1레벨의 효과가 1 늘어난다.',
+    now:s=>'증폭기 증폭기 1레벨당 +'+(1 + s.e_amp3) },
+
+  { id:'e_capext', grp:'전송 설비', name:'쨔무 근성 확장', max:16, req:s=>s.reb >= 16,
+    cost:n=>Math.ceil(1e10*Math.pow(3.5,n)),
+    desc:'쨔무 연타 근성의 레벨 한도가 5 늘어난다.',
+    now:s=>'근성 한도 '+capMax(s) },
+
+  { id:'e_critcap', grp:'강화 설비', name:'슈퍼 크리티컬', max:6, req:s=>s.reb >= 18,
+    cost:n=>Math.ceil(2.5e11*Math.pow(3,n)),
+    desc:'크리티컬 쨔무쨔무와 쨔무 리액션의 최고 레벨이 각각 10 늘어난다.',
+    now:s=>'최고 레벨 '+eventMax(s) },
+
   { id:'e_crit', grp:'강화 설비', name:'쨔무 크리티컬 강화', max:Infinity, req:s=>s.reb >= 8,
     cost:n=>Math.ceil(40000*Math.pow(1.5,n)),
     desc:'크리티컬 쨔무쨔무의 배율이 10 늘어난다.',
@@ -101,6 +116,11 @@ const EUP = [
     cost:n=>Math.ceil(1000*Math.pow(2.25,n)),
     desc:'쨔무 자동완성 매크로의 최대 보유 수가 5대 늘어난다.',
     now:s=>'매크로 최대 '+botMax(s)+'대' },
+
+  { id:'e_boostcap', grp:'생산 설비', name:'쨔무 부스트 확장', max:Infinity, req:s=>s.reb >= 14,
+    cost:n=>Math.ceil(1e8*Math.pow(10,n)),
+    desc:'쨔무 에너지 부스트를 살 수 있는 한도가 1 늘어난다.',
+    now:s=>'부스트 한도 '+boostMax(s) },
 
   { id:'e_fund', grp:'환생 설비', name:'쨔무 비상금', max:5,
     cost:n=>Math.ceil(200*Math.pow(5,n)),
@@ -138,6 +158,12 @@ const RESEARCH = [
     desc:'환생 요구량이 늘어나는 배수가 10배에서 8배로 줄어든다.' },
   { id:'r_multi', rp:5, name:'연속 환생',
     desc:'요구량을 10배 이상 넘겨 모았다면 한 번에 여러 번 환생한다.' },
+  { id:'r_critenergy', rp:3, name:'크리티컬 충전',
+    desc:'크리티컬이나 주인장 반응이 터진 전송은 쨔무 에너지를 2배로 준다. 둘 다 터지면 4배.' },
+  { id:'r_runtime', rp:5, name:'장기 도배',
+    desc:'이번 환생을 오래 유지할수록 모든 쨔무 획득량이 늘어난다. 6시간이면 2배가 된다.' },
+  { id:'r_chalenergy', rp:10, name:'챌린지 발전',
+    desc:'챌린지 달성으로 얻은 쨔무 획득량 배율이 쨔무 에너지에도 그대로 적용된다.' },
 ];
 
 /* ── 쨔무 챌린지 (연구와 함께 환생 10회에 열림) ── */
@@ -148,6 +174,9 @@ const CHALLENGES = [
   { n:3, name:'혼자만의 도배', desc:'2번의 제약에 더해, 쨔무 따라쟁이의 효과가 사라진다.' },
   { n:4, name:'연구 정전', desc:'3번의 제약에 더해, 모든 쨔무 연구의 효과가 사라진다.' },
   { n:5, name:'맨손 전송', desc:'4번의 제약에 더해, 모든 전송 설비(냉각기·콤보 안정기·증폭기 증폭기·연타 감각)의 효과가 사라진다.' },
+  { n:6, name:'콤보 실종', desc:'5번의 제약에 더해, 연타 콤보의 획득량 증가가 사라진다.' },
+  { n:7, name:'맨몸 도전', desc:'6번의 제약에 더해, 챌린지 달성 보너스(×1.5)가 적용되지 않는다.' },
+  { n:8, name:'유행 종료', desc:'7번의 제약에 더해, 쨔무 대유행의 효과가 사라진다.' },
 ];
 
 const RANKS = [
@@ -177,17 +206,18 @@ function normalize(){
   s.rpEnergy = Math.max(0, Math.floor(s.rpEnergy));
   UP.concat(EUP).forEach(u=>{ s[u.id] = Math.max(0, Math.floor(s[u.id])); });
   RESEARCH.forEach(r=>{ s[r.id] = s[r.id] ? 1 : 0; });
-  s.chal = Math.min(5, Math.max(0, Math.floor(s.chal)));
-  for(let i = 1; i <= 5; i++) s['chal'+i] = Math.min(3, Math.max(0, Math.floor(s['chal'+i])));
+  s.chal = Math.min(CHALLENGES.length, Math.max(0, Math.floor(s.chal)));
+  CHALLENGES.forEach(c=>{ s['chal'+c.n] = Math.min(3, Math.max(0, Math.floor(s['chal'+c.n]))); });
 }
 function fresh(){
   const o = { jamu:0, total:0, sends:0, combo:0, shopOpen:innerWidth>880, seen:{},
               reb:0, energy:0, energyTotal:0, facSeen:0, botMute:false,
               rpJamu:0, rpEnergy:0, resSeen:0,
-              chal:0, chal1:0, chal2:0, chal3:0, chal4:0, chal5:0, chalSeen:0, ts:Date.now() };
+              chal:0, chalSeen:0, runStart:Date.now(), ts:Date.now() };
   UP.forEach(u=>o[u.id]=0);
   EUP.forEach(u=>o[u.id]=0);
   RESEARCH.forEach(r=>o[r.id]=0);
+  CHALLENGES.forEach(c=>o['chal'+c.n]=0);
   return o;
 }
 function baseCd(st){ return 4*Math.pow(0.92, useGear(st,'e_cool')); }
@@ -198,11 +228,11 @@ function rebMul(st){                                             // 환생 배�
 }
 function goldMul(){ return goldUntil > performance.now() ? 10 : 1; }   // 황금 쨔무쨔무 버프
 function gMul(st){
-  return (1 + 0.12*(noFan() ? 0 : st.fan)) * Math.pow(2, st.meme) * rebMul(st) *
-         (1 + 0.25*st.e_press) * goldMul() * chalMul();
+  return (1 + 0.12*(noFan() ? 0 : st.fan)) * Math.pow(2, noMeme() ? 0 : st.meme) * rebMul(st) *
+         (1 + 0.25*st.e_press) * goldMul() * chalMul() * runMul(st);
 }
 function overMul(st){ return Math.pow(1.2, st.over); }
-function ampStep(st){ return 1 + useGear(st,'e_amp'); }                     // 증폭기 1레벨당 효과
+function ampStep(st){ return 1 + useGear(st,'e_amp') * (1 + st.e_amp3); }   // (증폭기)³로 1레벨당 효과가 커진다                     // 증폭기 1레벨당 효과
 function perSend(st){ return (1 + st.amp * ampStep(st)) * gMul(st); }
 function botSends(st){ return st.bot * overMul(st) / 5; }        // 매크로가 초당 보내는 횟수
 function botEventMul(st){                                        // 매크로에 적용되는 크리티컬·반응 기대 배율
@@ -211,13 +241,15 @@ function botEventMul(st){                                        // 매크로에
 }
 function botRate(st){ return noMacro() ? 0 : botSends(st) * gMul(st) * (1 + 0.25*st.e_conv) * botEventMul(st); }
 function botEnergyRate(st){ return (useRes(st,'r_botenergy') && !noMacro()) ? botSends(st) * energyPer(st) * 0.00025 : 0; }
+function capMax(st){ return 15 + 5*st.e_capext; }               // 쨔무 근성 확장으로 한도가 늘어난다
 function comboCap(st){ return 50 + 10*st.cap; }
+function eventMax(st){ return 40 + 10*st.e_critcap; }            // 슈퍼 크리티컬로 한도가 늘어난다
 function critMul(st){ return 10 + 10*st.e_crit; }    // 크리티컬 배율: 강화 1회마다 +10
 function ownMul(st){ return 10 + 10*st.e_react; }    // 주인장 반응 배율: 강화 1회마다 +10
 function botMax(st){ return 10 + 5*st.e_srv; }
 function comboWin(st){ return 1800 + 300*useGear(st,'e_combo'); }          // ms
 function comboStep(st){ return 2 + useGear(st,'sense'); }                   // 콤보 1당 획득량 %
-function comboMul(){ return 1 + Math.min(s.combo, comboCap(s))*comboStep(s)/100; }
+function comboMul(){ return noCombo() ? 1 : 1 + Math.min(s.combo, comboCap(s))*comboStep(s)/100; }
 function rebStep(st){ return useRes(st,'r_cost') ? 8 : 10; }               // 환생 절약 연구
 function costAt(st, reb){ return 1e6 * Math.pow(rebStep(st), reb); }
 function rebCost(st){ return costAt(st, st.reb); }               // 100만에서 시작
@@ -227,9 +259,20 @@ function rebTimes(){                                             // 한 번에 �
   while(k < 200 && s.jamu >= costAt(s, s.reb + k)) k++;
   return Math.max(1, k);
 }
+function boostMax(st){ return 10 + st.e_boostcap; }              // 쨔무 부스트 확장으로 한도가 늘어난다
+function boostCost(n){                                           // 11번째 구매부터 다른 공식
+  return n < 10 ? Math.ceil(10000*Math.pow(2, n)) : Math.ceil(1e16*Math.pow(125, n - 10));
+}
 function eboostMul(st){ return 1 + 0.1*st.eboost; }
-function energyPer(st){ return st.reb > 0 ? Math.pow(3, st.reb - 1) * eboostMul(st) : 0; }
+function energyPer(st){
+  if(st.reb <= 0) return 0;
+  return Math.pow(3, st.reb - 1) * eboostMul(st) * (useRes(st, 'r_chalenergy') ? chalMul() : 1);
+}
 function fundBonus(st){ return st.e_fund > 0 ? 1000*Math.pow(10, st.e_fund - 1) : 0; }
+function runTime(st){ return Math.max(0, Date.now() - st.runStart); }       // 이번 환생 경과 시간(ms)
+function runMul(st){                                             // 장기 도배 연구: 6시간에 걸쳐 ×1 → ×2
+  return useRes(st, 'r_runtime') ? 1 + Math.min(runTime(st)/(6*3600*1000), 1) : 1;
+}
 function rebVisible(){ return s.total >= 1e5 || s.reb > 0; }
 // 챌린지: s.chal이 진행 중인 번호(0이면 아님). 번호가 클수록 제약이 쌓인다.
 // 챌린지 번호 = 제약 단계. 번호가 클수록 앞 제약을 그대로 물려받는다.
@@ -238,11 +281,14 @@ function noCrit(){ return s.chal >= 2; }
 function noFan(){ return s.chal >= 3; }
 function noRes(){ return s.chal >= 4; }
 function noGear(){ return s.chal >= 5; }
+function noCombo(){ return s.chal >= 6; }
+function noChalBonus(){ return s.chal >= 7; }
+function noMeme(){ return s.chal >= 8; }
 function useRes(st, id){ return noRes() ? 0 : st[id]; }          // 연구 효과
 function useGear(st, id){ return noGear() ? 0 : st[id]; }        // 전송 설비 효과
 function chalDone(n){ return s['chal'+n] | 0; }
-function chalTotal(){ let t = 0; for(let i = 1; i <= 5; i++) t += chalDone(i); return t; }
-function chalMul(){ return Math.pow(1.5, chalTotal()); }         // 달성 1회마다 ×1.5
+function chalTotal(){ let t = 0; CHALLENGES.forEach(c=>t += chalDone(c.n)); return t; }
+function chalMul(){ return noChalBonus() ? 1 : Math.pow(1.5, chalTotal()); }   // 달성 1회마다 ×1.5
 function chalGoal(n){ return CHAL_GOALS[Math.min(chalDone(n), CHAL_GOALS.length - 1)]; }
 function chalOpen(n){ return n === 1 || chalDone(n - 1) > 0; }
 function hasChallenge(){ return s.reb >= 10 || chalTotal() > 0 || s.chal > 0; }
@@ -443,7 +489,9 @@ function send(){
   s.jamu += gain; s.total += gain; s.sends++;
 
   // 손으로 직접 보낼 때만 쨔무 에너지 생성: 2^(환생 - 1)
-  const eg = energyPer(s);
+  // 크리티컬 충전 연구: 터진 전송은 에너지도 2배씩
+  const egMul = useRes(s, 'r_critenergy') ? (big ? 2 : 1) * (own ? 2 : 1) : 1;
+  const eg = energyPer(s) * egMul;
   if(eg){ s.energy += eg; s.energyTotal += eg; }
 
   const kind = ((big ? 'crit ' : '') + (own ? 'owner' : '')).trim();
@@ -763,6 +811,7 @@ rebBtn.addEventListener('click', ()=>{
 // 환생·연구 초기화에서 공통으로 쓰는 정리 (환생 횟수는 건드리지 않는다)
 function wipeProgress(){
   UP.forEach(u=>{ if(!keepUp(u)) s[u.id] = 0; });
+  s.runStart = Date.now();                        // 환생·챌린지 정리마다 이번 환생 시간도 다시 센다
   s.jamu = fundBonus(s);
   s.combo = 0; readyAt = 0;
   shopCache.sig = ''; facCache.sig = ''; resCache.sig = '';
@@ -1033,7 +1082,13 @@ function paintWallet(bump){
     if(lastRank) sysMsg('내 등급이 <b>' + r + '</b>(으)로 올랐습니다.', true);
     lastRank = r; rankEl.textContent = r;
   }
-  rebTag.textContent = s.reb > 0 ? ' · 환생 ' + s.reb + '회' : '';
+  let tag = s.reb > 0 ? ' · 환생 ' + s.reb + '회' : '';
+  if(useRes(s, 'r_runtime')){
+    const m = Math.floor(runTime(s)/60000);
+    tag += ' · 이번 환생 ' + (m >= 60 ? Math.floor(m/60) + '시간 ' + (m%60) + '분' : m + '분') +
+           ' (×' + runMul(s).toFixed(2) + ')';
+  }
+  rebTag.textContent = tag;
   const v = 12 + Math.floor(Math.pow(s.total, 0.42));
   viewEl.textContent = fmt(v);
   voiceCnt.textContent = fmt(2 + Math.floor(v/9));
