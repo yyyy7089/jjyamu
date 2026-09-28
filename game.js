@@ -156,12 +156,18 @@ const RESEARCH = [
     desc:'10회째 환생부터, 환생할 때마다 환생 배율이 추가로 ×1.2 된다.' },
   { id:'r_cost', rp:3, name:'환생 절약',
     desc:'환생 요구량이 늘어나는 배수가 10배에서 8배로 줄어든다.' },
+  { id:'r_cost2', rp:5, name:'환생 절약 II', req:s=>s.sac >= 1,
+    desc:'환생 요구량이 늘어나는 배수가 1배 더 줄어든다.' },
+  { id:'r_sacmulti', rp:25, name:'연속 희생', req:s=>s.sac >= 1,
+    desc:'환생 횟수가 넉넉하다면 쨔무 희생을 한 번에 여러 번 한다.' },
   { id:'r_multi', rp:5, name:'연속 환생',
     desc:'요구량을 10배 이상 넘겨 모았다면 한 번에 여러 번 환생한다.' },
   { id:'r_critenergy', rp:3, name:'크리티컬 충전',
     desc:'크리티컬이나 주인장 반응이 터진 전송은 쨔무 에너지를 2배로 준다. 둘 다 터지면 4배.' },
   { id:'r_runtime', rp:5, name:'장기 도배',
     desc:'이번 환생을 오래 유지할수록 모든 쨔무 획득량이 늘어난다. 6시간이면 2배가 된다.' },
+  { id:'r_chalboost', rp:7, name:'쨔무 챌린지 부스트',
+    desc:'챌린지를 진행하는 동안 모든 쨔무 획득량이 10배가 된다. 연구가 통하지 않는 챌린지에서는 이 연구도 통하지 않는다.' },
   { id:'r_chalenergy', rp:10, name:'챌린지 발전',
     desc:'챌린지 달성으로 얻은 쨔무 획득량 배율이 쨔무 에너지에도 그대로 적용된다.' },
 ];
@@ -181,8 +187,13 @@ const CHALLENGES = [
 
 const RANKS = [
   [0,'뉴비'],[150,'눈팅 탈출'],[1200,'채팅 참여러'],[9000,'이모티콘 애호가'],
-  [70000,'도배 견습생'],[600000,'쨔무 장인'],[2e7,'채팅방 지배자'],[5e8,'쨔무 중독자'],
-  [2e10,'쨔무 재벌'],[5e11,'쨔무의 신'],[1e14,'쨔무 그 자체']
+  [70000,'도배 견습생'],[600000,'쨔무 장인'],[5e6,'쨔무 단골'],[2e7,'채팅방 지배자'],
+  [1e8,'쨔무 큰손'],[5e8,'쨔무 중독자'],[3e9,'쨔무 광신도'],[2e10,'쨔무 재벌'],
+  [1e11,'서버 최대 주주'],[5e11,'쨔무의 신'],[5e12,'쨔무 전설'],[1e14,'쨔무 그 자체'],
+  // 뒤로 갈수록 간격이 커진다 (×100 → ×1000 → ×1만 …)
+  [1e16,'쨔무 신화'],[1e19,'쨔무 특이점'],[1e23,'쨔무 성운'],[1e28,'쨔무 은하'],
+  [1e34,'쨔무 우주'],[1e41,'쨔무 차원'],[1e49,'쨔무 무한'],[1e58,'쨔무 초월'],
+  [1e68,'쨔무 그 너머']
 ];
 
 /* ── 상태 ─────────────────────────────────────── */
@@ -202,6 +213,7 @@ function normalize(){
     else if(d && typeof d === 'object'){ if(!v || typeof v !== 'object') s[k] = d; }
   }
   s.reb = Math.max(0, Math.floor(s.reb));
+  s.sac = Math.max(0, Math.floor(s.sac));
   s.rpJamu = Math.max(0, Math.floor(s.rpJamu));
   s.rpEnergy = Math.max(0, Math.floor(s.rpEnergy));
   UP.concat(EUP).forEach(u=>{ s[u.id] = Math.max(0, Math.floor(s[u.id])); });
@@ -213,7 +225,7 @@ function fresh(){
   const o = { jamu:0, total:0, sends:0, combo:0, shopOpen:innerWidth>880, seen:{},
               reb:0, energy:0, energyTotal:0, facSeen:0, botMute:false,
               rpJamu:0, rpEnergy:0, resSeen:0,
-              chal:0, chalSeen:0, runStart:Date.now(), ts:Date.now() };
+              chal:0, chalSeen:0, sac:0, runStart:Date.now(), ts:Date.now() };
   UP.forEach(u=>o[u.id]=0);
   EUP.forEach(u=>o[u.id]=0);
   RESEARCH.forEach(r=>o[r.id]=0);
@@ -229,7 +241,7 @@ function rebMul(st){                                             // 환생 배�
 function goldMul(){ return goldUntil > performance.now() ? 10 : 1; }   // 황금 쨔무쨔무 버프
 function gMul(st){
   return (1 + 0.12*(noFan() ? 0 : st.fan)) * Math.pow(2, noMeme() ? 0 : st.meme) * rebMul(st) *
-         (1 + 0.25*st.e_press) * goldMul() * chalMul() * runMul(st);
+         (1 + 0.25*st.e_press) * goldMul() * chalMul() * runMul(st) * chalBoost(st) * sacMul(st);
 }
 function overMul(st){ return Math.pow(1.2, st.over); }
 function ampStep(st){ return 1 + useGear(st,'e_amp') * (1 + st.e_amp3); }   // (증폭기)³로 1레벨당 효과가 커진다                     // 증폭기 1레벨당 효과
@@ -250,9 +262,9 @@ function botMax(st){ return 10 + 5*st.e_srv; }
 function comboWin(st){ return 1800 + 300*useGear(st,'e_combo'); }          // ms
 function comboStep(st){ return 2 + useGear(st,'sense'); }                   // 콤보 1당 획득량 %
 function comboMul(){ return noCombo() ? 1 : 1 + Math.min(s.combo, comboCap(s))*comboStep(s)/100; }
-function rebStep(st){ return useRes(st,'r_cost') ? 8 : 10; }               // 환생 절약 연구
+function rebStep(st){ return 10 - (useRes(st,'r_cost') ? 2 : 0) - (useRes(st,'r_cost2') ? 1 : 0); }               // 환생 절약 연구
 function costAt(st, reb){ return 1e6 * Math.pow(rebStep(st), reb); }
-function rebCost(st){ return costAt(st, st.reb); }               // 100만에서 시작
+function rebCost(st){ return costAt(st, st.reb); }               // 100만에서 시작               // 100만에서 시작
 function rebTimes(){                                             // 한 번에 진행할 환생 횟수 (연속 환생 연구)
   if(!useRes(s,'r_multi')) return 1;
   let k = 0;
@@ -269,6 +281,21 @@ function energyPer(st){
   return Math.pow(3, st.reb - 1) * eboostMul(st) * (useRes(st, 'r_chalenergy') ? chalMul() : 1);
 }
 function fundBonus(st){ return st.e_fund > 0 ? 1000*Math.pow(10, st.e_fund - 1) : 0; }
+function sacMul(st){                                             // 희생 배율: 2배씩, 첫 희생은 추가로 5배
+  const m = Math.pow(2, st.sac) * (st.sac >= 1 ? 5 : 1);
+  return s.chal > 0 ? Math.sqrt(m) : m;                          // 챌린지 안에서는 ^0.5
+}
+function sacReq(st){ return 20 + st.sac; }                       // 희생마다 필요한 환생 횟수가 1회씩 늘어난다
+function sacReady(){ return s.reb >= sacReq(s); }
+function sacTimes(){                                             // 연속 희생 연구
+  if(!useRes(s, 'r_sacmulti')) return 1;
+  let k = 0;
+  while(k < 200 && s.reb >= sacReq({sac: s.sac + k})) k++;
+  return Math.max(1, k);
+}
+function chalBoost(st){                                          // 쨔무 챌린지 부스트 연구
+  return (s.chal > 0 && useRes(st, 'r_chalboost')) ? 10 : 1;
+}
 function runTime(st){ return Math.max(0, Date.now() - st.runStart); }       // 이번 환생 경과 시간(ms)
 function runMul(st){                                             // 장기 도배 연구: 6시간에 걸쳐 ×1 → ×2
   return useRes(st, 'r_runtime') ? 1 + Math.min(runTime(st)/(6*3600*1000), 1) : 1;
@@ -294,7 +321,7 @@ function chalOpen(n){ return n === 1 || chalDone(n - 1) > 0; }
 function hasChallenge(){ return s.reb >= 10 || chalTotal() > 0 || s.chal > 0; }
 function rpJamuCost(st){ return 1e13 * Math.pow(1e3, st.rpJamu); }
 function rpEnergyCost(st){ return 1e7 * Math.pow(1e2, st.rpEnergy); }
-function rpEarned(st){ return st.rpJamu + st.rpEnergy + chalTotal(); }   // 챌린지 달성 1회당 1점
+function rpEarned(st){ return st.rpJamu + st.rpEnergy + chalTotal() + st.sac; }   // 챌린지 달성·희생 1회당 1점
 function rpSpent(st){ let n = 0; RESEARCH.forEach(r=>{ if(st[r.id]) n += r.rp; }); return n; }
 function rpLeft(st){ return rpEarned(st) - rpSpent(st); }
 function hasResearch(){ return s.reb >= 10 || rpEarned(s) > 0 || rpSpent(s) > 0; }
@@ -320,6 +347,12 @@ function fmt(n){
     if(n >= v){ const q = n/v*(1 + 1e-12); return (q>=100 ? Math.floor(q).toLocaleString('ko-KR') : (Math.floor(q*10 + 0.5)/10)) + name; }
   }
   return String(n);
+}
+function fmtMul(n){                                              // 배율 표시용 (소수 한 자리까지)
+  if(!isFinite(n)) return fmt(n);
+  if(n >= 10000) return fmt(n);
+  const r = Math.round(n*10)/10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
 function fmtE(n){ return (n < 1000 && Math.abs(n - Math.round(n)) > 1e-9) ? String(Math.round(n*10)/10) : fmt(n); }
 function clock(){ return new Date().toLocaleTimeString('ko-KR',{hour:'numeric',minute:'2-digit'}); }
@@ -774,7 +807,10 @@ function checkUnlocks(){
 const rebBox = document.getElementById('rebirthBox'), rebBtn = document.getElementById('rebBtn'),
       rebCostEl = document.getElementById('rebCost'), rebDesc = document.getElementById('rebDesc'),
       rebLv = document.getElementById('rebLv'), rebBar = document.getElementById('rebBar'),
-      rebNow = document.getElementById('rebNow');
+      rebNow = document.getElementById('rebNow'),
+      sacBtn = document.getElementById('sacBtn'), sacCost = document.getElementById('sacCost'),
+      sacDesc = document.getElementById('sacDesc'), sacLv = document.getElementById('sacLv'),
+      sacBar = document.getElementById('sacBar'), sacNow = document.getElementById('sacNow');
 let armAt = 0, armUntil = 0;
 
 function paintRebirth(){
@@ -794,10 +830,59 @@ function paintRebirth(){
   rebBar.style.width = Math.min(s.jamu/cost*100, 100) + '%';
   const times = can ? rebTimes() : 1;
   rebNow.textContent = (times > 1 ? '한 번에 ' + times + '회 · ' : '') +
-    '배율 ×' + fmt(rebMul(s)) + ' → ×' + fmt(rebMul(Object.assign({}, s, {reb: s.reb + times})));
+    '배율 ×' + fmtMul(rebMul(s)) + ' → ×' + fmtMul(rebMul(Object.assign({}, s, {reb: s.reb + times})));
   rebBtn.classList.toggle('can', can);
   rebBtn.classList.toggle('armed', armed);
   rebBtn.disabled = !can;
+  paintSacrifice();
+}
+
+let sacAt = 0, sacUntil = 0;
+function paintSacrifice(){
+  const show = s.reb >= sacReq(s) || s.sac > 0;
+  sacBtn.hidden = !show;
+  if(!show) return;
+  const ok = sacReady() && !s.chal, now = performance.now();
+  if(!ok) sacUntil = 0;
+  sacBtn.classList.toggle('armed', ok && now < sacUntil);
+  sacCost.textContent = '환생 ' + sacReq(s) + '회';
+  sacDesc.textContent = (s.chal ? '쨔무 챌린지 중에는 희생할 수 없다. ' : '') +
+    '환생 횟수와 공장 설비를 포함해, 환생이 되돌리는 모든 것을 처음으로 되돌린다. ' +
+    '쨔무 연구와 챌린지 기록은 남는다. 대신 희생 배율이 2배가 되고 연구 포인트를 1점 받는다. ' +
+    '희생할 때마다 다음 희생에 필요한 환생 횟수가 1회씩 늘어난다.' +
+    ' 챌린지 안에서는 희생 배율이 ^0.5로 줄어든다.' +
+    (s.sac === 0 ? ' 첫 희생은 추가로 5배를 더 받는다.' : '');
+  sacLv.textContent = s.sac + '회';
+  sacBar.style.width = Math.min(s.reb/sacReq(s)*100, 100) + '%';
+  const times = ok ? sacTimes() : 1;
+  sacNow.textContent = (times > 1 ? '한 번에 ' + times + '회 · ' : '환생 ' + s.reb + '/' + sacReq(s) + '회 · ') +
+    '배율 ×' + fmtMul(sacMul(s)) + ' → ×' + fmtMul(sacMul({sac: s.sac + times}));
+  sacBtn.disabled = !ok;
+}
+sacBtn.addEventListener('click', ()=>{
+  if(!sacReady() || s.chal) return;
+  const now = performance.now();
+  if(now < sacUntil && now - sacAt > 400){ sacUntil = 0; sacrifice(); }
+  else if(!(now < sacUntil)){ sacAt = now; sacUntil = now + 3000; }
+  paintRebirth();
+});
+
+function sacrifice(){
+  if(!sacReady() || s.chal) return;
+  const first = s.sac === 0;
+  const times = sacTimes();
+  s.sac += times;
+  s.reb = 0;                                      // 환생 횟수도 처음으로
+  EUP.forEach(u=>s[u.id] = 0);                    // 공장 설비 초기화
+  s.energy = 0;
+  wipeProgress();                                 // 환생이 되돌리는 것들
+  facCache.sig = ''; resCache.sig = ''; chalCache.sig = '';
+  clearGold();
+  sysMsg('<b>쨔무 희생 ' + s.sac + '회</b>' + (times > 1 ? ' (한 번에 ' + times + '회)' : '') +
+    ' — 환생 횟수와 공장을 모두 바치고 희생 배율 ×' + fmtMul(sacMul(s)) +
+    (first ? ' (첫 희생 보너스 ×5 포함)' : '') + ', 연구 포인트 ' + times + '점을 얻었습니다.', true);
+  sysMsg('다음 희생에는 <b>환생 ' + sacReq(s) + '회</b>가 필요합니다.', true);
+  setView('main'); paintChannels(); paintWallet(); save();
 }
 rebBtn.addEventListener('click', ()=>{
   if(s.jamu < rebCost(s)) return;
@@ -824,7 +909,7 @@ function rebirth(){
   s.reb += times;
   wipeProgress();
   sysMsg('<b>쨔무 환생 ' + s.reb + '회</b> 완료!' + (times > 1 ? ' (한 번에 ' + times + '회) ' : ' ') +
-    '모든 쨔무 획득량 ×' + fmt(rebMul(s)) +
+    '모든 쨔무 획득량 ×' + fmtMul(rebMul(s)) +
     (s.jamu > 0 ? ', 비상금 ' + fmt(s.jamu) + ' 쨔무로 시작합니다.' : '.'), true);
   // 이번 환생으로 새로 열린 업그레이드 알림
   const before = Object.assign({}, s, {reb: prev});
@@ -862,7 +947,9 @@ function paintFactory(){
   facSub.textContent = '손으로 보낼 때마다 +' + fmtE(energyPer(s)) + ' 에너지';
   facStats.innerHTML =
     '<div class="stat"><span>쨔무 환생</span><b>' + s.reb + '회</b></div>' +
-    '<div class="stat"><span>환생 배율</span><b>×' + rebMul(s) + '</b></div>' +
+    '<div class="stat"><span>환생 배율</span><b>×' + fmtMul(rebMul(s)) + '</b></div>' +
+    '<div class="stat"><span>희생 배율</span><b>×' + fmtMul(sacMul(s)) +
+      '</b><small>챌린지 안에서는 ^0.5</small></div>' +
     '<div class="stat"><span>전송당 에너지</span><b>' + fmtE(energyPer(s)) + '</b><small>3^(' + s.reb + '−1)' +
       (s.eboost > 0 ? ' ×' + eboostMul(s).toFixed(1) : '') + '</small></div>' +
     '<div class="stat"><span>다음 환생</span><b>' + fmt(rebCost(s)) + '</b><small>쨔무</small></div>';
@@ -909,10 +996,11 @@ function paintResearch(){
   convJamuBtn.disabled = s.jamu < jc;   convJamuBtn.classList.toggle('primary', s.jamu >= jc);
   convEnergyBtn.disabled = s.energy < ec; convEnergyBtn.classList.toggle('primary', s.energy >= ec);
 
-  const sig = RESEARCH.map(r=>r.id + (s[r.id] ? '1' : '0')).join('');
+  const list = RESEARCH.filter(r=>!r.req || r.req(s) || s[r.id]);
+  const sig = list.map(r=>r.id + (s[r.id] ? '1' : '0')).join('');
   if(sig !== resCache.sig){
     resCache.sig = sig; resList.innerHTML = '';
-    RESEARCH.forEach(r=>{
+    list.forEach(r=>{
       const done = !!s[r.id];
       const b = document.createElement('button');
       b.className = 'item res' + (done ? ' done' : '');
@@ -1083,6 +1171,7 @@ function paintWallet(bump){
     lastRank = r; rankEl.textContent = r;
   }
   let tag = s.reb > 0 ? ' · 환생 ' + s.reb + '회' : '';
+  if(s.sac > 0) tag += ' · 희생 ' + s.sac + '회 (×' + fmtMul(sacMul(s)) + ')';
   if(useRes(s, 'r_runtime')){
     const m = Math.floor(runTime(s)/60000);
     tag += ' · 이번 환생 ' + (m >= 60 ? Math.floor(m/60) + '시간 ' + (m%60) + '분' : m + '분') +

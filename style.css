@@ -277,7 +277,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .fac-amt{display:inline-block;font-family:var(--disp);font-size:36px;line-height:1.1;color:var(--cyan)}
 .fac-amt.bump{animation:bump .22s ease}
 .fac-sub{font-size:12.5px;color:var(--dim);margin-top:2px}
-.fac-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 4px}
+.fac-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0 4px}
 .stat{background:var(--side);border-radius:10px;padding:9px 12px;min-width:0}
 .stat span{display:block;font-size:11px;color:var(--dim2)}
 .stat b{font-family:var(--disp);font-weight:400;font-size:16px}
@@ -399,3 +399,12 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .item.chal.active .nm{color:var(--cyan)}
 .item.chal.done .cost{color:var(--pink)}
 .item.chal .track i{background:var(--pink);opacity:.8}
+
+/* 쨔무 희생 카드 */
+.item.sacrifice{background:linear-gradient(135deg,rgba(255,212,126,.12),rgba(255,158,201,.08))}
+.item.sacrifice .nm{color:var(--gold)}
+.item.sacrifice .track i{background:var(--gold);opacity:.85}
+.item.sacrifice.armed .arm{background:var(--gold)}
+.item.sacrifice:not(:disabled){border-color:var(--gold)}
+
+.stat small{display:inline-block}
