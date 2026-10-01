@@ -25,6 +25,7 @@
       <button class="ch" data-ch="factory" id="chFactory" hidden><span class="h">#</span>쨔무-공장<span class="new" id="facNew">NEW</span></button>
       <button class="ch" data-ch="research" id="chResearch" hidden><span class="h">#</span>쨔무-연구<span class="new" id="resNew">NEW</span></button>
       <button class="ch" data-ch="challenge" id="chChallenge" hidden><span class="h">#</span>쨔무-챌린지<span class="new" id="chalNew">NEW</span></button>
+      <button class="ch" data-ch="build" id="chBuild" hidden><span class="h">#</span>공장-건설<span class="new" id="bldNew">NEW</span></button>
       <button class="ch lock" data-ch="notice"><span class="h">#</span>공지사항</button>
       <button class="ch lock" data-ch="free"><span class="h">#</span>자유수다</button>
       <button class="ch lock" data-ch="info"><span class="h">#</span>업그레이드-정보</button>
@@ -49,6 +50,7 @@
         <div class="topic" id="topicMain">서버원 <span id="viewers">12</span>명 · 내 등급 <b id="rank">뉴비</b><span id="rebTag"></span></div>
         <div class="topic" id="topicFac" hidden>손으로 직접 보낸 쨔무쨔무가 <b>쨔무 에너지</b>가 되는 곳</div>
         <div class="topic" id="topicRes" hidden>쨔무와 쨔무 에너지를 <b>연구 포인트</b>로 바꿔 영구적인 연구를 진행하는 곳</div>
+        <div class="topic" id="topicBuild" hidden>5×5 격자에 빌딩을 올려 <b>쨔무 점수</b>를 쌓는 곳</div>
         <div class="topic" id="topicChal" hidden>제약을 걸고 목표를 달성해 <b>영구 배율</b>과 <b>연구 포인트</b>를 얻는 곳</div>
       </div>
       <span class="chaltag" id="chalTag" hidden></span>
@@ -104,6 +106,31 @@
           연구 포인트를 전부 돌려받는 대신, 그 순간 환생과 같은 정리가 일어납니다. 환생 횟수는 늘지 않습니다.</p>
           <button class="dbtn" id="resReset">연구 초기화</button>
         </div>
+      </div>
+    </div>
+
+    <div class="factory" id="build" hidden>
+      <div class="fac-in">
+        <div class="fac-hero">
+          <img id="bldEmote" alt="">
+          <div>
+            <div class="fac-lbl">쨔무 점수</div>
+            <div class="fac-amt" id="bldAmt">0</div>
+            <div class="fac-sub" id="bldSub"></div>
+          </div>
+        </div>
+        <div class="bld-wrap">
+          <div>
+            <div class="bld-grid" id="bldGrid"></div>
+            <div class="bld-pal" id="bldPal"></div>
+          </div>
+          <div class="bld-side">
+            <div class="bld-info" id="bldInfo"></div>
+            <div class="bld-ms" id="bldMs"></div>
+          </div>
+        </div>
+        <p class="fac-note">빌딩은 언제든 옮기거나 철거할 수 있고, 철거하면 지었던 비용을 그대로 돌려받습니다.
+        같은 종류를 많이 지을수록 다음 비용이 올라갑니다.</p>
       </div>
     </div>
 

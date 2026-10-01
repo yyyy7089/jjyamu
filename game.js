@@ -1,5 +1,5 @@
 const EMOTE = "jjamu.png";
-['srvIcon','meAv','draftEmote','facEmote','resEmote','chalEmote'].forEach(id=>document.getElementById(id).src = EMOTE);
+['srvIcon','meAv','draftEmote','facEmote','resEmote','chalEmote','bldEmote'].forEach(id=>document.getElementById(id).src = EMOTE);
 
 /* ── 쨔무 업그레이드 (환생 시 초기화) ─────────────── */
 const UP = [
@@ -156,6 +156,10 @@ const RESEARCH = [
     desc:'10회째 환생부터, 환생할 때마다 환생 배율이 추가로 ×1.2 된다.' },
   { id:'r_cost', rp:3, name:'환생 절약',
     desc:'환생 요구량이 늘어나는 배수가 10배에서 8배로 줄어든다.' },
+  { id:'r_combodecay', rp:7, name:'콤보 여운', req:s=>s.sac >= 1,
+    desc:'콤보 유지 시간이 지나도 콤보가 0으로 돌아가지 않고, 유지 시간마다 1씩만 줄어든다.' },
+  { id:'r_botplain', rp:5, name:'매크로 보정', req:s=>s.sac >= 1,
+    desc:'매크로가 보내는 쨔무쨔무마다 손 전송 기댓값(콤보와 크리티컬·주인장 반응 확률 포함)의 0.01%를 추가로 얻는다. 이 몫은 매크로 크리티컬로 다시 늘어나지 않는다.' },
   { id:'r_cost2', rp:5, name:'환생 절약 II', req:s=>s.sac >= 1,
     desc:'환생 요구량이 늘어나는 배수가 1배 더 줄어든다.' },
   { id:'r_sacmulti', rp:25, name:'연속 희생', req:s=>s.sac >= 1,
@@ -184,6 +188,58 @@ const CHALLENGES = [
   { n:7, name:'맨몸 도전', desc:'6번의 제약에 더해, 챌린지 달성 보너스(×1.5)가 적용되지 않는다.' },
   { n:8, name:'유행 종료', desc:'7번의 제약에 더해, 쨔무 대유행의 효과가 사라진다.' },
 ];
+
+/* ── 공장 건설 (희생 10회에 열림) ──────────────── */
+const GRID = 5;
+const BUILDINGS = [                                              // col·row는 팔레트 배치
+  { id:'G', label:'G', gen:1, base:1e16, mult:10, col:1, row:1,
+    name:'쨔무 발전기', desc:'쨔무 점수를 1 늘린다.' },
+  { id:'V', label:'V', base:1e20, mult:100, col:2, row:1,
+    name:'수직 증폭탑', desc:'바로 위아래 칸 발전기의 쨔무 점수를 3배로 한다.' },
+  { id:'R', label:'R', base:1e24, mult:1e4, col:3, row:1,
+    name:'편향 송신기', desc:'오른쪽 칸 발전기의 쨔무 점수를 3배로 하지만, 왼쪽 칸 발전기의 점수는 절반이 된다.' },
+  { id:'S', label:'S', base:1e32, mult:1e6, col:4, row:1,
+    name:'시너지 코어', desc:'모든 발전기의 쨔무 점수를 +50% 한다. 여러 개 놓으면 합연산으로 커진다.' },
+  { id:'M', label:'G₂', gen:5, base:1e40, mult:1e8, col:1, row:2,
+    name:'쨔무 발전기 2', desc:'쨔무 발전기의 상위 빌딩. 쨔무 점수를 5 늘린다.' },
+];
+const MILESTONES = [
+  { at:1,   desc:'쨔무와 쨔무 에너지 획득량이 √(쨔무 점수 + 1)배가 된다.' },
+  { at:10,  desc:'1초마다 모든 쨔무 업그레이드를 한 번씩 자동으로 구매 시도한다.' },
+  { at:100, desc:'쨔무 점수가 100에서 2배가 될 때마다 모든 쨔무 업그레이드의 레벨 한도가 1 늘어난다.' },
+];
+function bldOf(id){ return BUILDINGS.find(b=>b.id === id); }
+function bldCount(id){ let n = 0; s.grid.forEach(c=>{ if(c === id) n++; }); return n; }
+function bldCost(b){ return b.base * Math.pow(b.mult, bldCount(b.id)); }
+function genBoost(){ return 1 + 0.5*bldCount('S'); }             // 시너지 코어: 발전기에만, 합연산
+function cellAt(r, c){ return (r >= 0 && r < GRID && c >= 0 && c < GRID) ? s.grid[r*GRID + c] : 0; }
+function cellMul(i){                                             // i번 칸 빌딩이 받는 점수 배율
+  const r = Math.floor(i/GRID), c = i%GRID;
+  let m = 1;
+  if(cellAt(r-1, c) === 'V') m *= 3;
+  if(cellAt(r+1, c) === 'V') m *= 3;
+  if(cellAt(r, c-1) === 'R') m *= 3;                              // 왼쪽에 송신기 → 이 칸이 오른쪽
+  if(cellAt(r, c+1) === 'R') m *= 0.5;                            // 오른쪽에 송신기 → 이 칸이 왼쪽
+  return m;
+}
+function cellScore(i){                                           // 점수는 발전기 종류만 만든다
+  const b = bldOf(s.grid[i]);
+  if(!b || !b.gen) return 0;
+  return b.gen * genBoost() * cellMul(i);
+}
+let scoreCache = null;
+function bldScore(){
+  if(scoreCache === null){
+    let t = 0;
+    for(let i = 0; i < GRID*GRID; i++) t += cellScore(i);
+    scoreCache = t;
+  }
+  return scoreCache;
+}
+function scoreMul(){ const v = bldScore(); return v >= 1 ? Math.sqrt(v + 1) : 1; }
+function autoBuyOn(){ return bldScore() >= 10; }
+function capBonus(){ const v = bldScore(); return v >= 100 ? Math.floor(Math.log2(v/100)) + 1 : 0; }
+function hasBuild(){ return s.sac >= 10 || s.grid.some(c=>!!c); }
 
 const RANKS = [
   [0,'뉴비'],[150,'눈팅 탈출'],[1200,'채팅 참여러'],[9000,'이모티콘 애호가'],
@@ -214,6 +270,10 @@ function normalize(){
   }
   s.reb = Math.max(0, Math.floor(s.reb));
   s.sac = Math.max(0, Math.floor(s.sac));
+  if(!Array.isArray(s.grid)) s.grid = Array(GRID*GRID).fill(0);
+  s.grid.length = GRID*GRID;
+  for(let i = 0; i < s.grid.length; i++) if(!bldOf(s.grid[i])) s.grid[i] = 0;
+  scoreCache = null;
   s.rpJamu = Math.max(0, Math.floor(s.rpJamu));
   s.rpEnergy = Math.max(0, Math.floor(s.rpEnergy));
   UP.concat(EUP).forEach(u=>{ s[u.id] = Math.max(0, Math.floor(s[u.id])); });
@@ -225,7 +285,8 @@ function fresh(){
   const o = { jamu:0, total:0, sends:0, combo:0, shopOpen:innerWidth>880, seen:{},
               reb:0, energy:0, energyTotal:0, facSeen:0, botMute:false,
               rpJamu:0, rpEnergy:0, resSeen:0,
-              chal:0, chalSeen:0, sac:0, runStart:Date.now(), ts:Date.now() };
+              chal:0, chalSeen:0, sac:0, bldSeen:0, grid:Array(25).fill(0),
+              runStart:Date.now(), ts:Date.now() };
   UP.forEach(u=>o[u.id]=0);
   EUP.forEach(u=>o[u.id]=0);
   RESEARCH.forEach(r=>o[r.id]=0);
@@ -241,7 +302,7 @@ function rebMul(st){                                             // 환생 배�
 function goldMul(){ return goldUntil > performance.now() ? 10 : 1; }   // 황금 쨔무쨔무 버프
 function gMul(st){
   return (1 + 0.12*(noFan() ? 0 : st.fan)) * Math.pow(2, noMeme() ? 0 : st.meme) * rebMul(st) *
-         (1 + 0.25*st.e_press) * goldMul() * chalMul() * runMul(st) * chalBoost(st) * sacMul(st);
+         (1 + 0.25*st.e_press) * goldMul() * chalMul() * runMul(st) * chalBoost(st) * sacMul(st) * scoreMul();
 }
 function overMul(st){ return Math.pow(1.2, st.over); }
 function ampStep(st){ return 1 + useGear(st,'e_amp') * (1 + st.e_amp3); }   // (증폭기)³로 1레벨당 효과가 커진다                     // 증폭기 1레벨당 효과
@@ -251,7 +312,31 @@ function botEventMul(st){                                        // 매크로에
   if(!useRes(st,'r_botcrit')) return 1;
   return (1 + st.crit*0.01*(critMul(st)/10 - 1)) * (1 + st.react*0.01*(ownMul(st)/10 - 1));
 }
-function botRate(st){ return noMacro() ? 0 : botSends(st) * gMul(st) * (1 + 0.25*st.e_conv) * botEventMul(st); }
+function botRate(st){
+  if(noMacro()) return 0;
+  const base = botSends(st) * gMul(st) * (1 + 0.25*st.e_conv) * botEventMul(st);
+  // 매크로 보정 연구: 손 전송 기댓값의 0.01%를 base와 별도로 더한다.
+  // base에만 곱해지는 매크로 크리티컬(botEventMul)이 이 몫에는 두 번 적용되지 않는다.
+  const plain = useRes(st,'r_botplain') ? botSends(st) * clickExp(st) * 0.0001 : 0;
+  return base + plain;
+}
+function clickExp(st){                                           // 손 전송 한 번의 기댓값 (콤보·크리티컬·리액션 포함)
+  const base = perSend(st) * comboMul();
+  const pc = noCrit() ? 0 : st.crit*0.01;                        // 크리티컬 확률
+  const po = noCrit() ? 0 : st.react*0.01;                       // 주인장 반응 확률
+  const amp = useRes(st,'r_pillmul') ? 1 : 0;                    // 리액션 증폭 연구
+  const eBig = amp ? 12.5 : 1;                                   // 크리티컬 리액션 3~22의 평균
+  const q = st.fan > 0 ? Math.min(0.04 + st.fan*0.01, 0.3) : 0;  // 일반 리액션이 달릴 확률
+  const ePlain = amp ? (1 - q) + q*(st.fan + 1)/2 : 1;           // 일반 리액션 1~따라쟁이의 평균
+  // 크리티컬이 터지면 그 리액션(3~22)이, 아무것도 안 터지면 일반 리액션이 배율이 된다.
+  // 주인장 반응만 터진 경우에는 숫자 리액션이 없어 배율이 붙지 않는다.
+  return base * (
+    pc*po*critMul(st)*ownMul(st)*eBig +
+    pc*(1 - po)*critMul(st)*eBig +
+    (1 - pc)*po*ownMul(st) +
+    (1 - pc)*(1 - po)*ePlain
+  );
+}
 function botEnergyRate(st){ return (useRes(st,'r_botenergy') && !noMacro()) ? botSends(st) * energyPer(st) * 0.00025 : 0; }
 function capMax(st){ return 15 + 5*st.e_capext; }               // 쨔무 근성 확장으로 한도가 늘어난다
 function comboCap(st){ return 50 + 10*st.cap; }
@@ -278,7 +363,7 @@ function boostCost(n){                                           // 11번째 구
 function eboostMul(st){ return 1 + 0.1*st.eboost; }
 function energyPer(st){
   if(st.reb <= 0) return 0;
-  return Math.pow(3, st.reb - 1) * eboostMul(st) * (useRes(st, 'r_chalenergy') ? chalMul() : 1);
+  return Math.pow(3, st.reb - 1) * eboostMul(st) * (useRes(st, 'r_chalenergy') ? chalMul() : 1) * scoreMul();
 }
 function fundBonus(st){ return st.e_fund > 0 ? 1000*Math.pow(10, st.e_fund - 1) : 0; }
 function sacMul(st){                                             // 희생 배율: 2배씩, 첫 희생은 추가로 5배
@@ -627,7 +712,9 @@ const side = document.getElementById('side'), menuBtn = document.getElementById(
       chMain = document.querySelector('.ch[data-ch="main"]'), goldTag = document.getElementById('goldTag'),
       topicChal = document.getElementById('topicChal'), challengeEl = document.getElementById('challenge'),
       chChallenge = document.getElementById('chChallenge'), chalNew = document.getElementById('chalNew'),
-      chalTag = document.getElementById('chalTag');
+      chalTag = document.getElementById('chalTag'),
+      chBuild = document.getElementById('chBuild'), bldNew = document.getElementById('bldNew'),
+      topicBuild = document.getElementById('topicBuild'), buildEl = document.getElementById('build');
 let view = 'main', sideOpen = false;
 
 function mobile(){ return innerWidth <= 880; }
@@ -644,21 +731,26 @@ function setView(v){
   if(v === 'factory' && !hasFactory()) v = 'main';
   if(v === 'research' && !hasResearch()) v = 'main';
   if(v === 'challenge' && !hasChallenge()) v = 'main';
+  if(v === 'build' && !hasBuild()) v = 'main';
   view = v;
   log.hidden = v !== 'main';
   factoryEl.hidden = v !== 'factory';
   researchEl.hidden = v !== 'research';
   challengeEl.hidden = v !== 'challenge';
+  buildEl.hidden = v !== 'build';
   topicMain.hidden = v !== 'main';
   topicFac.hidden = v !== 'factory';
   topicRes.hidden = v !== 'research';
   topicChal.hidden = v !== 'challenge';
+  topicBuild.hidden = v !== 'build';
   chName.textContent = v === 'main' ? '쨔무쨔무-도배'
-    : v === 'factory' ? '쨔무-공장' : v === 'research' ? '쨔무-연구' : '쨔무-챌린지';
+    : v === 'factory' ? '쨔무-공장' : v === 'research' ? '쨔무-연구'
+    : v === 'challenge' ? '쨔무-챌린지' : '공장-건설';
   document.querySelectorAll('.ch[data-ch]').forEach(b=>b.classList.toggle('on', b.dataset.ch === v));
   if(v === 'factory'){ s.facSeen = 1; paintFactory(); }
   else if(v === 'research'){ s.resSeen = 1; paintResearch(); }
   else if(v === 'challenge'){ s.chalSeen = 1; paintChallenge(); }
+  else if(v === 'build'){ s.bldSeen = 1; paintBuild(); }
   else log.scrollTop = log.scrollHeight;
   paintChannels();
   setSide(false);
@@ -673,7 +765,9 @@ function credits(){
   const p1 = document.createElement('p'); p1.textContent = 'Claude AI를 이용해 제작됨';
   const p2 = document.createElement('p');
   p2.innerHTML = '<span>유시아 쨔무쨔무 이미지:</span> 윤건 님';
-  box.append(im, h, p1, p2);
+  const p3 = document.createElement('p');
+  p3.innerHTML = '<span>일부 컨텐츠는 Grass Cutting Incremental 및 Antimatter Dimensions에서 아이디어를 얻음</span>';
+  box.append(im, h, p1, p2, p3);
   bd.appendChild(box);
   lastKey = ''; curBody = null;
   if(stick()) log.scrollTop = log.scrollHeight;
@@ -688,7 +782,7 @@ const CH_MSG = {
 document.querySelectorAll('.ch[data-ch]').forEach(b=>{
   b.addEventListener('click', ()=>{
     const k = b.dataset.ch;
-    if(k === 'main' || k === 'factory' || k === 'research' || k === 'challenge'){ setView(k); return; }
+    if(k === 'main' || k === 'factory' || k === 'research' || k === 'challenge' || k === 'build'){ setView(k); return; }
     setView('main');
     if(k === 'credit'){ credits(); return; }
     sysMsg(CH_MSG[k]);
@@ -703,8 +797,10 @@ function paintChannels(){
   resNew.hidden = !!s.resSeen;
   chChallenge.hidden = !hasChallenge();
   chalNew.hidden = !!s.chalSeen;
+  chBuild.hidden = !hasBuild();
+  bldNew.hidden = !!s.bldSeen;
   menuDot.classList.toggle('show', (hasFactory() && !s.facSeen) || (hasResearch() && !s.resSeen) ||
-    (hasChallenge() && !s.chalSeen) || (!!goldLive && view !== 'main'));
+    (hasChallenge() && !s.chalSeen) || (hasBuild() && !s.bldSeen) || (!!goldLive && view !== 'main'));
 }
 
 /* ── 업그레이드 목록 공통 렌더러 ─────────────────── */
@@ -765,12 +861,15 @@ function setShop(open){
 shopBtn.addEventListener('click', ()=>setShop(!s.shopOpen));
 scrim.addEventListener('click', ()=>{ setShop(false); setSide(false); });
 
-function maxOf(u){ return typeof u.max === 'function' ? u.max(s) : u.max; }
+function maxOf(u){
+  const m = typeof u.max === 'function' ? u.max(s) : u.max;
+  return UP.indexOf(u) >= 0 ? m + capBonus() : m;            // 마일스톤 100: 쨔무 업그레이드 한도 증가
+}
 function descOf(u){ return typeof u.desc === 'function' ? u.desc(s) : u.desc; }
 function reqOk(u){ return !u.req || u.req(s); }
 function visible(u){ return reqOk(u) && (s.total >= (u.unlock || 0) || s[u.id] > 0); }
 function visibleE(u){ return reqOk(u) || s[u.id] > 0; }
-function buy(u){
+function buy(u, silent){
   const lv = s[u.id];
   if(lv >= maxOf(u)) return;
   const c = u.cost(lv);
@@ -778,7 +877,7 @@ function buy(u){
   s.jamu -= spendOf(u, lv);               // 연구했으면 소모하지 않는다
   s[u.id] = lv + 1;
   paintWallet(); paintShop();
-  sysMsg('<b>'+u.name+'</b> Lv.'+(lv+1)+' 구매 — '+u.now(s), true);
+  if(!silent) sysMsg('<b>'+u.name+'</b> Lv.'+(lv+1)+' 구매 — '+u.now(s), true);
 }
 const jamuWallet = ()=>s.jamu;     jamuWallet.cost = u=>u.cost(s[u.id]); jamuWallet.free = freeUp;
 const energyWallet = ()=>s.energy; energyWallet.cost = u=>u.cost(s[u.id]);
@@ -1143,6 +1242,112 @@ function paintChallenge(){
   }
 }
 
+/* ── 공장 건설 화면 ───────────────────────────── */
+const bldAmt = document.getElementById('bldAmt'), bldSub = document.getElementById('bldSub'),
+      bldGrid = document.getElementById('bldGrid'), bldPal = document.getElementById('bldPal'),
+      bldInfo = document.getElementById('bldInfo'), bldMs = document.getElementById('bldMs');
+let bldSel = 'G', bldHover = null, bldSig = '';
+
+function placeBld(i, id){                                        // id가 ''이면 철거
+  const cur = s.grid[i];
+  if(cur === id){ bldHover = {id: cur, i}; bldDetail(cur, i); return; }   // 같은 칸을 다시 누르면 정보만 보여준다
+  let back = 0;
+  if(cur){                                                       // 철거는 지었던 값 그대로 환불
+    s.grid[i] = 0; scoreCache = null;
+    back = bldCost(bldOf(cur)); s.energy += back;
+  }
+  if(id){
+    const b = bldOf(id), cost = bldCost(b);
+    if(s.energy < cost){                                         // 모자라면 되돌린다
+      if(cur){ s.energy -= back; s.grid[i] = cur; scoreCache = null; }
+      return;
+    }
+    s.energy -= cost; s.grid[i] = id; scoreCache = null;
+  }
+  bldSig = ''; shopCache.sig = '';
+  bldHover = {id: s.grid[i], i};                  // 터치에서도 방금 바꾼 칸의 정보가 보이게
+  paintWallet(); paintBuild(); save();
+}
+function bldDetail(id, i){
+  if(!id){
+    bldInfo.innerHTML = '<h4>빈 칸</h4><p>아래에서 빌딩을 고른 뒤 칸을 누르면 지어집니다. ' +
+      '이미 지어진 칸을 누르면 고른 빌딩으로 바뀌고, 철거를 고르면 비웁니다.</p>';
+    return;
+  }
+  const b = bldOf(id);
+  const mine = (typeof i === 'number' && s.grid[i] === id);
+  bldInfo.innerHTML = '<h4>' + b.label + ' · ' + b.name + '</h4>' +
+    '<div class="k">다음 건설 비용 ' + fmt(bldCost(b)) + ' 에너지 · 지어둔 수 ' + bldCount(b.id) + '개</div>' +
+    '<p>' + b.desc + '</p>' +
+    (mine ? '<div class="val">이 칸의 점수 ' + fmtMul(cellScore(i)) +
+      ' (받는 배율 ×' + fmtMul(cellMul(i)) + ')</div>' : '');
+}
+function paintBuild(){
+  const score = bldScore();
+  bldAmt.textContent = fmtMul(score);
+  bldSub.textContent = '쨔무·에너지 획득량 ×' + fmtMul(scoreMul()) +
+    (autoBuyOn() ? ' · 자동 구매 작동 중' : '') +
+    (capBonus() ? ' · 업그레이드 한도 +' + capBonus() : '');
+
+  const sig = s.grid.join(',') + '|' + BUILDINGS.map(b=>s.energy >= bldCost(b) ? 1 : 0).join('') + '|' + bldSel;
+  if(sig === bldSig) return;
+  bldSig = sig;
+
+  bldGrid.innerHTML = '';
+  s.grid.forEach((id, i)=>{
+    const cell = document.createElement('button');
+    cell.className = 'cell' + (id ? ' on ' + id : '');
+    cell.dataset.i = i;
+    cell.innerHTML = id ? bldOf(id).label + '<small>' + (cellScore(i) ? fmtMul(cellScore(i)) : '') + '</small>' : '·';
+    bldGrid.appendChild(cell);
+  });
+
+  bldPal.innerHTML = '';
+  BUILDINGS.forEach(b=>{
+    const el = document.createElement('button');
+    el.className = 'pal' + (bldSel === b.id ? ' sel' : '') + (s.energy >= bldCost(b) ? '' : ' poor');
+    el.dataset.b = b.id;
+    el.innerHTML = '<b>' + b.label + '</b>' + fmt(bldCost(b));
+    el.style.gridColumn = b.col; el.style.gridRow = b.row;
+    bldPal.appendChild(el);
+  });
+  const del = document.createElement('button');
+  del.className = 'pal' + (bldSel === '' ? ' sel' : '');
+  del.dataset.b = ''; del.innerHTML = '<b>×</b>철거';
+  del.style.gridColumn = 2; del.style.gridRow = 2;
+  bldPal.appendChild(del);
+
+  bldMs.innerHTML = '<h4>마일스톤</h4>' + MILESTONES.map(m=>
+    '<div class="ms' + (score >= m.at ? ' done' : '') + '"><b>점수 ' + m.at + '</b><span>' + m.desc + '</span></div>'
+  ).join('');
+
+  bldDetail(bldHover ? bldHover.id : bldSel, bldHover ? bldHover.i : undefined);
+}
+bldGrid.addEventListener('click', e=>{
+  const cell = e.target.closest('.cell');
+  if(cell) placeBld(+cell.dataset.i, bldSel);
+});
+bldGrid.addEventListener('mouseover', e=>{
+  const cell = e.target.closest('.cell');
+  if(!cell) return;
+  const i = +cell.dataset.i;
+  bldHover = {id: s.grid[i], i};
+  bldDetail(s.grid[i], i);
+});
+bldPal.addEventListener('click', e=>{
+  const el = e.target.closest('.pal');
+  if(!el) return;
+  bldSel = el.dataset.b; bldHover = null; bldSig = '';
+  paintBuild();
+});
+bldPal.addEventListener('mouseover', e=>{
+  const el = e.target.closest('.pal');
+  if(!el) return;
+  bldHover = el.dataset.b ? {id: el.dataset.b} : null;
+  bldDetail(el.dataset.b);
+});
+buildEl.addEventListener('mouseleave', ()=>{ bldHover = null; bldDetail(bldSel); });
+
 /* ── 화면 갱신 ────────────────────────────────── */
 const amtEl = document.getElementById('amt'), rateEl = document.getElementById('rate'),
       rankEl = document.getElementById('rank'), viewEl = document.getElementById('viewers'),
@@ -1159,6 +1364,7 @@ function paintWallet(bump){
   if(view === 'factory' && !hasFactory()){ setView('main'); return; }
   if(view === 'research' && !hasResearch()){ setView('main'); return; }
   if(view === 'challenge' && !hasChallenge()){ setView('main'); return; }
+  if(view === 'build' && !hasBuild()){ setView('main'); return; }
   const txt = fmt(s.jamu);
   amtEl.textContent = txt; meJamu.textContent = txt;
   meEnergy.textContent = s.reb > 0 ? ' · ' + fmt(s.energy) + ' 에너지' : '';
@@ -1189,21 +1395,29 @@ function paintWallet(bump){
   if(view === 'factory') paintFactory();
   if(view === 'research') paintResearch();
   if(view === 'challenge') paintChallenge();
+  if(view === 'build') paintBuild();
   chalTag.hidden = !s.chal;
   if(s.chal) chalTag.textContent = '챌린지 ' + s.chal + ' · 목표 ' + fmt(chalGoal(s.chal));
   dot.classList.toggle('show', !s.shopOpen && anyAffordable());
 }
 
 /* ── 루프 ─────────────────────────────────────── */
-let last = performance.now(), acc = 0, botAcc = 0, chatAt = 0, tick = 0, typeSig = '';
+let last = performance.now(), acc = 0, botAcc = 0, chatAt = 0, tick = 0, typeSig = '', autoAcc = 0;
 
-function breakCombo(){ s.combo = 0; }
+let comboDecayAt = 0;
+function breakCombo(elapsed){
+  if(useRes(s,'r_combodecay')){                    // 콤보 여운 연구: 0이 아니라 1씩 감소
+    if(elapsed) s.combo = Math.max(0, s.combo - Math.floor(elapsed/comboWin(s)));
+    return;
+  }
+  s.combo = 0;
+}
 
 function loop(now){
   normalize();
   const raw = now - last;
   const dt = Math.min(raw/1000, 0.5); last = now;
-  if(raw > 2500) breakCombo();   // 탭 전환 등으로 루프가 멈췄던 경우
+  if(raw > 2500) breakCombo(raw);   // 탭 전환 등으로 루프가 멈췄던 경우
 
   const br = botRate(s);
   if(br > 0){ s.jamu += br*dt; s.total += br*dt; }
@@ -1252,7 +1466,12 @@ function loop(now){
   }
 
   const win = comboWin(s);
-  if(s.combo > 0 && now > readyAt + win) s.combo = 0;
+  if(s.combo > 0 && now > readyAt + win){
+    if(useRes(s,'r_combodecay')){
+      if(!comboDecayAt) comboDecayAt = readyAt + win;
+      while(s.combo > 0 && now >= comboDecayAt){ s.combo--; comboDecayAt += win; }
+    }else s.combo = 0;
+  }else comboDecayAt = 0;
 
   // 입력 중 / 콤보 표시
   if(s.combo > 0){
@@ -1269,6 +1488,11 @@ function loop(now){
         : '<span class="bub"><i></i><i></i><i></i></span>매크로 ' + fmt(s.bot) + '대가 입력 중입니다' +
           (s.botMute ? ' · 메시지 숨김' : '');
     }
+  }
+
+  if(autoBuyOn()){                                               // 마일스톤 10: 자동 구매
+    autoAcc += dt;
+    if(autoAcc >= 1){ autoAcc = 0; UP.forEach(u=>buy(u, true)); }
   }
 
   acc += dt;
@@ -1308,7 +1532,7 @@ function load(){
   }catch(e){ return false; }
 }
 setInterval(save, 5000);
-addEventListener('visibilitychange', ()=>{ if(document.hidden){ breakCombo(); save(); } });
+addEventListener('visibilitychange', ()=>{ if(document.hidden){ breakCombo(0); save(); } });
 addEventListener('pagehide', save);
 addEventListener('resize', updateScrim);
 
