@@ -177,7 +177,7 @@ const RESEARCH = [
 ];
 
 /* ── 쨔무 챌린지 (연구와 함께 환생 10회에 열림) ── */
-const CHAL_GOALS = [1e12, 1e16, 1e20];
+function chalGoalAt(k){ return 1e12 * Math.pow(1e4, k); }        // 1조에서 1만 배씩
 const CHALLENGES = [
   { n:1, name:'매크로 정지', desc:'쨔무 자동완성 매크로의 효과가 사라진다.' },
   { n:2, name:'무반응 채팅', desc:'1번의 제약에 더해, 크리티컬과 주인장 반응이 일어나지 않는다.' },
@@ -187,26 +187,33 @@ const CHALLENGES = [
   { n:6, name:'콤보 실종', desc:'5번의 제약에 더해, 연타 콤보의 획득량 증가가 사라진다.' },
   { n:7, name:'맨몸 도전', desc:'6번의 제약에 더해, 챌린지 달성 보너스(×1.5)가 적용되지 않는다.' },
   { n:8, name:'유행 종료', desc:'7번의 제약에 더해, 쨔무 대유행의 효과가 사라진다.' },
+  { n:9, name:'점수 정전', secret:true, desc:'8번의 제약에 더해, 쨔무 점수 배율이 동작하지 않는다.' },
+  { n:10, name:'희생 무효', secret:true, desc:'9번의 제약에 더해, 쨔무 희생 배율이 동작하지 않는다.' },
 ];
 
 /* ── 공장 건설 (희생 10회에 열림) ──────────────── */
 const GRID = 5;
 const BUILDINGS = [                                              // col·row는 팔레트 배치
-  { id:'G', label:'G', gen:1, base:1e16, mult:10, col:1, row:1,
+  { id:'G', label:'G', gen:1, base:1e16, mult:4, col:1, row:1,
     name:'쨔무 발전기', desc:'쨔무 점수를 1 늘린다.' },
   { id:'V', label:'V', base:1e20, mult:100, col:2, row:1,
     name:'수직 증폭탑', desc:'바로 위아래 칸 발전기의 쨔무 점수를 3배로 한다.' },
-  { id:'R', label:'R', base:1e24, mult:1e4, col:3, row:1,
+  { id:'R', label:'R', base:1e24, mult:10, col:3, row:1,
     name:'편향 송신기', desc:'오른쪽 칸 발전기의 쨔무 점수를 3배로 하지만, 왼쪽 칸 발전기의 점수는 절반이 된다.' },
-  { id:'S', label:'S', base:1e32, mult:1e6, col:4, row:1,
+  { id:'S', label:'S', base:1e28, mult:30, col:4, row:1,
     name:'시너지 코어', desc:'모든 발전기의 쨔무 점수를 +50% 한다. 여러 개 놓으면 합연산으로 커진다.' },
-  { id:'M', label:'G₂', gen:5, base:1e40, mult:1e8, col:1, row:2,
+  { id:'M', label:'G₂', gen:5, base:1e32, mult:4, col:1, row:2,
     name:'쨔무 발전기 2', desc:'쨔무 발전기의 상위 빌딩. 쨔무 점수를 5 늘린다.' },
+  { id:'W', label:'V₂', base:1e32, mult:100, col:2, row:2,
+    name:'수직 증폭탑 2', desc:'위 세 칸(좌상·상·우상)과 아래 세 칸(좌하·하·우하) 발전기의 쨔무 점수를 +30% 한다. ' +
+      '여러 개가 겹치면 합연산으로 커지고, 다른 빌딩의 배율과는 곱해진다.' },
 ];
 const MILESTONES = [
-  { at:1,   desc:'쨔무와 쨔무 에너지 획득량이 √(쨔무 점수 + 1)배가 된다.' },
-  { at:10,  desc:'1초마다 모든 쨔무 업그레이드를 한 번씩 자동으로 구매 시도한다.' },
-  { at:100, desc:'쨔무 점수가 100에서 2배가 될 때마다 모든 쨔무 업그레이드의 레벨 한도가 1 늘어난다.' },
+  { at:1,    desc:'쨔무와 쨔무 에너지 획득량이 √(쨔무 점수 + 1)배가 된다.' },
+  { at:10,   desc:'1초마다 모든 쨔무 업그레이드를 한 번씩 자동으로 구매 시도한다.' },
+  { at:50,   desc:'쨔무 점수가 50에서 2배가 될 때마다 연구 포인트를 2점 받는다.' },
+  { at:100,  desc:'쨔무 점수가 100에서 2배가 될 때마다 모든 쨔무 업그레이드의 레벨 한도가 1 늘어난다.' },
+  { at:1000, desc:'쨔무 점수가 1000에서 10배가 될 때마다 챌린지 1~8의 달성 가능 횟수가 1 늘어난다.' },
 ];
 function bldOf(id){ return BUILDINGS.find(b=>b.id === id); }
 function bldCount(id){ let n = 0; s.grid.forEach(c=>{ if(c === id) n++; }); return n; }
@@ -220,6 +227,11 @@ function cellMul(i){                                             // i번 칸 빌
   if(cellAt(r+1, c) === 'V') m *= 3;
   if(cellAt(r, c-1) === 'R') m *= 3;                              // 왼쪽에 송신기 → 이 칸이 오른쪽
   if(cellAt(r, c+1) === 'R') m *= 0.5;                            // 오른쪽에 송신기 → 이 칸이 왼쪽
+  let w = 0;                                                      // 위·아래 세 칸의 V₂는 합연산
+  [[r-1,c-1],[r-1,c],[r-1,c+1],[r+1,c-1],[r+1,c],[r+1,c+1]].forEach(p=>{
+    if(cellAt(p[0], p[1]) === 'W') w++;
+  });
+  if(w) m *= 1 + 0.3*w;
   return m;
 }
 function cellScore(i){                                           // 점수는 발전기 종류만 만든다
@@ -236,9 +248,12 @@ function bldScore(){
   }
   return scoreCache;
 }
-function scoreMul(){ const v = bldScore(); return v >= 1 ? Math.sqrt(v + 1) : 1; }
-function autoBuyOn(){ return bldScore() >= 10; }
+function scoreMul(){ if(noScore()) return 1; const v = bldScore(); return v >= 1 ? Math.sqrt(v + 1) : 1; }
+function autoReady(){ return bldScore() >= 10; }                 // 마일스톤 10 달성 여부
+function autoBuyOn(){ return autoReady() && !s.autoOff; }        // 켜져 있는지
 function capBonus(){ const v = bldScore(); return v >= 100 ? Math.floor(Math.log2(v/100)) + 1 : 0; }
+function bldRp(){ const v = bldScore(); return v >= 50 ? 2*(Math.floor(Math.log2(v/50)) + 1) : 0; }
+function chalBonus(){ const v = bldScore(); return v >= 1000 ? Math.floor(Math.log10(v/1000)) + 1 : 0; }
 function hasBuild(){ return s.sac >= 10 || s.grid.some(c=>!!c); }
 
 const RANKS = [
@@ -285,7 +300,7 @@ function fresh(){
   const o = { jamu:0, total:0, sends:0, combo:0, shopOpen:innerWidth>880, seen:{},
               reb:0, energy:0, energyTotal:0, facSeen:0, botMute:false,
               rpJamu:0, rpEnergy:0, resSeen:0,
-              chal:0, chalSeen:0, sac:0, bldSeen:0, grid:Array(25).fill(0),
+              chal:0, chalSeen:0, sac:0, bldSeen:0, autoOff:false, grid:Array(25).fill(0),
               runStart:Date.now(), ts:Date.now() };
   UP.forEach(u=>o[u.id]=0);
   EUP.forEach(u=>o[u.id]=0);
@@ -367,6 +382,7 @@ function energyPer(st){
 }
 function fundBonus(st){ return st.e_fund > 0 ? 1000*Math.pow(10, st.e_fund - 1) : 0; }
 function sacMul(st){                                             // 희생 배율: 2배씩, 첫 희생은 추가로 5배
+  if(noSac()) return 1;                                          // 챌린지 10에서는 무효
   const m = Math.pow(2, st.sac) * (st.sac >= 1 ? 5 : 1);
   return s.chal > 0 ? Math.sqrt(m) : m;                          // 챌린지 안에서는 ^0.5
 }
@@ -396,17 +412,20 @@ function noGear(){ return s.chal >= 5; }
 function noCombo(){ return s.chal >= 6; }
 function noChalBonus(){ return s.chal >= 7; }
 function noMeme(){ return s.chal >= 8; }
+function noScore(){ return s.chal >= 9; }
+function noSac(){ return s.chal >= 10; }
 function useRes(st, id){ return noRes() ? 0 : st[id]; }          // 연구 효과
 function useGear(st, id){ return noGear() ? 0 : st[id]; }        // 전송 설비 효과
 function chalDone(n){ return s['chal'+n] | 0; }
 function chalTotal(){ let t = 0; CHALLENGES.forEach(c=>t += chalDone(c.n)); return t; }
 function chalMul(){ return noChalBonus() ? 1 : Math.pow(1.5, chalTotal()); }   // 달성 1회마다 ×1.5
-function chalGoal(n){ return CHAL_GOALS[Math.min(chalDone(n), CHAL_GOALS.length - 1)]; }
+function chalMax(n){ return n <= 8 ? 3 + chalBonus() : 3; }      // 마일스톤 1000: 1~8만 늘어난다
+function chalGoal(n){ return chalGoalAt(Math.min(chalDone(n), chalMax(n) - 1)); }
 function chalOpen(n){ return n === 1 || chalDone(n - 1) > 0; }
 function hasChallenge(){ return s.reb >= 10 || chalTotal() > 0 || s.chal > 0; }
 function rpJamuCost(st){ return 1e13 * Math.pow(1e3, st.rpJamu); }
 function rpEnergyCost(st){ return 1e7 * Math.pow(1e2, st.rpEnergy); }
-function rpEarned(st){ return st.rpJamu + st.rpEnergy + chalTotal() + st.sac; }   // 챌린지 달성·희생 1회당 1점
+function rpEarned(st){ return st.rpJamu + st.rpEnergy + chalTotal() + st.sac + bldRp(); }   // 챌린지 달성·희생 1회당 1점
 function rpSpent(st){ let n = 0; RESEARCH.forEach(r=>{ if(st[r.id]) n += r.rp; }); return n; }
 function rpLeft(st){ return rpEarned(st) - rpSpent(st); }
 function hasResearch(){ return s.reb >= 10 || rpEarned(s) > 0 || rpSpent(s) > 0; }
@@ -591,8 +610,9 @@ function send(){
 
   // 콤보 창은 [readyAt, readyAt + comboWin] — 화면 갱신 여부와 무관하게 판정
   const step = (big && useRes(s,'r_combo')) ? 10 : 1;                      // 크리티컬 콤보 연구
-  if(s.combo > 0 && now <= readyAt + comboWin(s)) s.combo = Math.min(s.combo + step, comboCap(s));
-  else s.combo = Math.min(step, comboCap(s));
+  // 콤보 여운 연구가 있으면 유지 시간이 지나 줄어든 콤보에도 그대로 이어붙인다
+  const keep = s.combo > 0 && (now <= readyAt + comboWin(s) || useRes(s,'r_combodecay'));
+  s.combo = keep ? Math.min(s.combo + step, comboCap(s)) : Math.min(step, comboCap(s));
   // 리액션을 먼저 정한다. 달리는 조건은 그대로 두고, 개수만 배율로 쓴다 (리액션 증폭 연구)
   const pills = [];
   if(own) pills.push({own:true});
@@ -1161,7 +1181,7 @@ function disarmChal(){
   chalCache.sig = '';
 }
 function enterChal(n){
-  if(s.chal || !chalOpen(n) || chalDone(n) >= 3) return;
+  if(s.chal || !chalOpen(n) || chalDone(n) >= chalMax(n)) return;
   wipeProgress(); clearGold();
   s.chal = n;
   setView('main');
@@ -1173,7 +1193,7 @@ function leaveChal(done){
   const n = s.chal;
   if(!n) return;
   s.chal = 0;
-  if(done) s['chal'+n] = Math.min(3, chalDone(n) + 1);
+  if(done) s['chal'+n] = Math.min(chalMax(n), chalDone(n) + 1);
   wipeProgress(); clearGold();
   setView('main');
   if(done) sysMsg('<b>쨔무 챌린지 ' + n + ' 달성!</b> 모든 쨔무 획득량 ×1.5, 연구 포인트 1점을 받았습니다. ' +
@@ -1191,7 +1211,7 @@ chalExit.addEventListener('click', ()=>{
   clearTimeout(chalTimer); chalTimer = setTimeout(disarmChal, 3000);
 });
 function tapChal(n){
-  if(s.chal || !chalOpen(n) || chalDone(n) >= 3) return;
+  if(s.chal || !chalOpen(n) || chalDone(n) >= chalMax(n)) return;
   const now = performance.now();
   if(chalArmN === n && now < chalArmUntil && now - chalArmAt > 400){ disarmChal(); enterChal(n); return; }
   chalArmN = n; chalArmAt = now; chalArmUntil = now + 3000;
@@ -1216,11 +1236,12 @@ function paintChallenge(){
   }
   chalExit.hidden = !inChal;
 
-  const sig = CHALLENGES.map(c=>chalDone(c.n)).join('') + ':' + s.chal + ':' + chalArmN;
+  const sig = CHALLENGES.map(c=>chalDone(c.n)).join(',') + ':' + s.chal + ':' + chalArmN + ':' + chalBonus();
   if(sig !== chalCache.sig){
     chalCache.sig = sig; chalList.innerHTML = '';
-    CHALLENGES.forEach(c=>{
-      const done = chalDone(c.n), open = chalOpen(c.n), full = done >= 3, active = s.chal === c.n;
+    CHALLENGES.filter(c=>!c.secret || chalDone(8) > 0).forEach(c=>{   // 9·10은 챌린지 8을 깨야 보인다
+      const mx = chalMax(c.n);
+      const done = chalDone(c.n), open = chalOpen(c.n), full = done >= mx, active = s.chal === c.n;
       const b = document.createElement('button');
       b.className = 'item chal' + (active ? ' active' : '') + (full ? ' done' : '');
       b.dataset.chal = c.n;
@@ -1230,8 +1251,8 @@ function paintChallenge(){
       b.querySelector('.nm').textContent = '챌린지 ' + c.n + ' · ' + c.name;
       b.querySelector('.ds').textContent = open ? c.desc : '앞 챌린지를 한 번 이상 달성하면 열립니다.';
       b.querySelector('.cost').textContent = !open ? '잠김' : full ? '완료' : '목표 ' + fmt(chalGoal(c.n));
-      b.querySelector('.lv').textContent = '달성 ' + done + '/3';
-      b.querySelector('.track i').style.width = (done/3*100) + '%';
+      b.querySelector('.lv').textContent = '달성 ' + done + '/' + mx;
+      b.querySelector('.track i').style.width = (done/mx*100) + '%';
       b.querySelector('.now').textContent = active ? '진행 중' : full ? '' :
         (chalArmN === c.n ? '한 번 더 누르면 진입' : (s.chal ? '다른 챌린지 진행 중' : '누르면 진입'));
       b.disabled = !open || full || !!s.chal;
@@ -1245,7 +1266,8 @@ function paintChallenge(){
 /* ── 공장 건설 화면 ───────────────────────────── */
 const bldAmt = document.getElementById('bldAmt'), bldSub = document.getElementById('bldSub'),
       bldGrid = document.getElementById('bldGrid'), bldPal = document.getElementById('bldPal'),
-      bldInfo = document.getElementById('bldInfo'), bldMs = document.getElementById('bldMs');
+      bldInfo = document.getElementById('bldInfo'), bldMs = document.getElementById('bldMs'),
+      autoBtn = document.getElementById('autoBtn');
 let bldSel = 'G', bldHover = null, bldSig = '';
 
 function placeBld(i, id){                                        // id가 ''이면 철거
@@ -1286,8 +1308,11 @@ function paintBuild(){
   const score = bldScore();
   bldAmt.textContent = fmtMul(score);
   bldSub.textContent = '쨔무·에너지 획득량 ×' + fmtMul(scoreMul()) +
-    (autoBuyOn() ? ' · 자동 구매 작동 중' : '') +
     (capBonus() ? ' · 업그레이드 한도 +' + capBonus() : '');
+  autoBtn.hidden = !autoReady();
+  autoBtn.classList.toggle('on', autoBuyOn());
+  autoBtn.setAttribute('aria-pressed', String(autoBuyOn()));
+  autoBtn.title = autoBuyOn() ? '자동 구매 끄기' : '자동 구매 켜기';
 
   const sig = s.grid.join(',') + '|' + BUILDINGS.map(b=>s.energy >= bldCost(b) ? 1 : 0).join('') + '|' + bldSel;
   if(sig === bldSig) return;
@@ -1314,7 +1339,7 @@ function paintBuild(){
   const del = document.createElement('button');
   del.className = 'pal' + (bldSel === '' ? ' sel' : '');
   del.dataset.b = ''; del.innerHTML = '<b>×</b>철거';
-  del.style.gridColumn = 2; del.style.gridRow = 2;
+  del.style.gridColumn = 3; del.style.gridRow = 2;
   bldPal.appendChild(del);
 
   bldMs.innerHTML = '<h4>마일스톤</h4>' + MILESTONES.map(m=>
@@ -1323,6 +1348,11 @@ function paintBuild(){
 
   bldDetail(bldHover ? bldHover.id : bldSel, bldHover ? bldHover.i : undefined);
 }
+autoBtn.addEventListener('click', ()=>{
+  s.autoOff = !s.autoOff;
+  sysMsg(s.autoOff ? '쨔무 업그레이드 자동 구매를 껐습니다.' : '쨔무 업그레이드 자동 구매를 켰습니다.');
+  paintBuild(); paintWallet(); save();
+});
 bldGrid.addEventListener('click', e=>{
   const cell = e.target.closest('.cell');
   if(cell) placeBld(+cell.dataset.i, bldSel);
